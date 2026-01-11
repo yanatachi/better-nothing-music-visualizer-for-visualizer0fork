@@ -72,22 +72,26 @@ def get_jetson_model():
 
 # Auto-detect Jetson at module load
 IS_JETSON = is_jetson_platform()
+# Enable GPU if CuPy is available, regardless of Jetson
+USE_GPU = CUPY_AVAILABLE
+
 if IS_JETSON:
     _model = get_jetson_model()
     print(f"[+] Jetson platform detected: {_model}")
-    if CUPY_AVAILABLE:
-        try:
-            # Try to get device name safely
-            dev_id = cp.cuda.Device().id
-            # On some Jetson CuPy builds, .name might be missing or bytes
-            # cp.cuda.runtime.getDeviceProperties(dev_id) returns a dict
-            props = cp.cuda.runtime.getDeviceProperties(dev_id)
-            dev_name = props.get('name', b'Unknown GPU').decode('utf-8', 'ignore')
-            print(f"[+] CuPy GPU acceleration enabled (CUDA device: {dev_name})")
-        except Exception as e:
-            print(f"[+] CuPy GPU acceleration enabled (Device detection error: {e})")
-    else:
-        print("[!] CuPy not installed - FFT will use CPU. Install with: pip install cupy-cuda12x")
+
+if USE_GPU:
+    try:
+        # Try to get device name safely
+        dev_id = cp.cuda.Device().id
+        # On some Jetson CuPy builds, .name might be missing or bytes
+        # cp.cuda.runtime.getDeviceProperties(dev_id) returns a dict
+        props = cp.cuda.runtime.getDeviceProperties(dev_id)
+        dev_name = props.get('name', b'Unknown GPU').decode('utf-8', 'ignore')
+        print(f"[+] CuPy GPU acceleration enabled (CUDA device: {dev_name})")
+    except Exception as e:
+        print(f"[+] CuPy GPU acceleration enabled (Device detection error: {e})")
+else:
+    print("[!] CuPy not installed - FFT will use CPU. Install with: pip install cupy-cuda12x")
 
 # Jetson Orin Nano optimized FFmpeg settings (6-core ARM, no NVENC)
 CONVERT_SETTINGS_JETSON = {
@@ -97,13 +101,13 @@ CONVERT_SETTINGS_JETSON = {
     "sample_rate": 48000,        # Opus optimal rate
     "channels": 2,
     "extra_args": [
-        "-threads", "6",         # Use all 6 ARM Cortex-A78AE cores
-        "-compression_level", "5",  # Lower Opus complexity (default 10, range 0-10)
+        "-threads", "12",         # Max threads (tried 6, lets go 12)
+        # "-compression_level" will be set dynamically in convert_to_ogg
     ]
 }
 # =====================================================================
 
-def convert_to_ogg_gstreamer(input_path, output_path, bitrate="112000"):
+def convert_to_ogg_gstreamer(input_path, output_path, bitrate="112000", complexity=0):
     """
     Convert audio to OGG/Opus using GStreamer pipeline with hardware decoding (NVDEC) where possible.
     Pipeline: filesrc -> decodebin -> audioconvert -> audioresample -> opusenc -> oggmux -> filesink
@@ -115,40 +119,62 @@ def convert_to_ogg_gstreamer(input_path, output_path, bitrate="112000"):
     # GStreamer pipeline for OGG/Opus conversion
     # decodebin handles hardware decoding if available (NVDEC)
     # opusenc settings: bitrate=112k (balanced), complexity=5 (faster)
+    # Quote paths to handle spaces
     cmd = [
         gst_bin, "-q",
-        "filesrc", f"location={input_path}", "!",
+        "filesrc", f"location='{input_path}'", "!",
         "decodebin", "!",
         "audioconvert", "!",
         "audioresample", "!",
-        "opusenc", f"bitrate={bitrate}", "complexity=5", "frame-size=20", "!", 
+        "opusenc", f"bitrate={bitrate}", f"complexity={int(complexity)}", "frame-size=20", "!", 
         "oggmux", "!",
-        "filesink", f"location={output_path}"
+        "filesink", f"location='{output_path}'"
     ]
     
     print(f"[+] Converting with GStreamer (HW accel): {' '.join(cmd)}")
+    t_gst_start = time.time()
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
         raise RuntimeError(f"GStreamer conversion failed: {res.stderr}")
-    print(f"[+] GStreamer conversion complete: {output_path}")
+    
+    # CLEANUP STEP: Strip metadata
+    tmp_clean = output_path + ".clean.ogg"
+    cmd_clean = ["ffmpeg", "-y", "-i", output_path, "-c", "copy", "-map_metadata", "-1", tmp_clean]
+    res_clean = subprocess.run(cmd_clean, capture_output=True, text=True)
+    
+    if res_clean.returncode == 0 and os.path.isfile(tmp_clean) and os.path.getsize(tmp_clean) > 0:
+        os.replace(tmp_clean, output_path)
+    else:
+        # If cleanup fails, verify original file exists and warn
+        if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
+             raise RuntimeError(f"GStreamer succeeded but file is missing/empty and cleanup failed: {res_clean.stderr}")
+        print(f"[!] Warning: Metadata cleanup failed, using original file. Error: {res_clean.stderr}")
+
+    # Final check
+    if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
+        raise RuntimeError(f"Output file is missing or empty: {output_path}")
+
+    print(f"[+] GStreamer conversion complete: {output_path} (Took {time.time() - t_gst_start:.3f}s)")
     return output_path
 
 # ------------------ helpers ------------------
-def convert_to_ogg(input_path, output_path):
+def convert_to_ogg(input_path, output_path, **kwargs):
     """
     Convert any audio file to OGG using ffmpeg with settings from CONVERT_SETTINGS.
     Automatically uses Jetson-optimized settings or GStreamer when detected.
-    The function signature is unchanged so existing callers still work.
+    The function signature is unchanged so existing callers still work (default complexity=10 or 5).
     """
+    # Force complexity if passed, otherwise default to 5
+    complexity = kwargs.get("complexity", 5)
+
     # 1. Try GStreamer on Jetson first (Hardware Decoding)
-    # DISABLED: GStreamer OGG muxing was leaking metadata/album art, causing "File not created by Composer" errors.
-    # Reverting to FFmpeg (with Jetson optimizations) ensures clean files via -map_metadata -1.
-    # if IS_JETSON:
-    #    try:
-    #        # Default to 112k bitrate for GStreamer path
-    #        return convert_to_ogg_gstreamer(input_path, output_path, bitrate="112000")
-    #    except Exception as e:
-    #        print(f"[!] GStreamer conversion failed (falling back to FFmpeg): {e}")
+    # Re-enabled with metadata cleanup fix!
+    if IS_JETSON:
+       try:
+           # Default to 112k bitrate for GStreamer path
+           return convert_to_ogg_gstreamer(input_path, output_path, bitrate="112000", complexity=complexity)
+       except Exception as e:
+           print(f"[!] GStreamer conversion failed (falling back to FFmpeg): {e}")
 
     # 2. Fallback to FFmpeg (Software)
     # Use Jetson settings if on Jetson platform
@@ -176,6 +202,9 @@ def convert_to_ogg(input_path, output_path):
     elif quality is not None:
         # map quality to bitrate fallback if desired; default to 96k..192k mapping could be added
         cmd += ["-b:a", f"{int(quality)*16}k"]
+    
+    # Add compression level (complexity)
+    cmd += ["-compression_level", str(int(complexity))]
   
     # append any user-specified extra ffmpeg args
     cmd += list(extra)
@@ -206,9 +235,10 @@ def load_audio_gstreamer(path):
 
     # Pipeline to decode and dump raw samples to STDOUT
     # audio/x-raw,format=F32LE,rate=48000,channels=1,layout=interleaved
+    # Quote paths to handle spaces
     cmd = [
         gst_bin, "-q", 
-        "filesrc", f"location={path}", "!",
+        "filesrc", f"location='{path}'", "!",
         "decodebin", "!",
         "audioconvert", "!",
         "audioresample", "!",
@@ -287,6 +317,9 @@ def compute_raw_matrix(samples, sr, zones, fps):
     freqs = rfftfreq(nfft, 1 / sr)
     n_frames = int(np.ceil(len(samples) / hop))
     
+    # --- OPTIMIZED IMPLEMENTATION ---
+    use_gpu = USE_GPU
+    
     # Pre-parse zone bounds once
     zone_bounds = []
     for zi, zone in enumerate(zones):
@@ -299,27 +332,15 @@ def compute_raw_matrix(samples, sr, zones, fps):
                 high = float(zone[1])
                 if low > high:
                     low, high = high, low
-                    print(f"[!] Warning: swapped zone bounds for zone {zi} -> low={low}, high={high}")
                 zone_bounds.append((low, high))
             except Exception:
                 print(f"[!] Invalid numeric bounds for zone {zi}: {zone!r} -- using 0..0")
                 zone_bounds.append((0.0, 0.0))
-    
-    use_gpu = CUPY_AVAILABLE and IS_JETSON
-    if use_gpu:
-        print(f"[+] compute_raw_matrix [GPU]: sr={sr}, hop={hop}, win={win_len}, nfft={nfft}, frames={n_frames}")
-    else:
-        print(f"[+] compute_raw_matrix [CPU]: sr={sr}, hop={hop}, win={win_len}, nfft={nfft}, frames={n_frames}")
-    
-    raw = np.zeros((n_frames, len(zones)), dtype=float)
-    tick = max(1, n_frames // 10)
 
     if use_gpu:
-        # GPU-accelerated path using CuPy (Vectorized)
-        print(f"[+] compute_raw_matrix [GPU-Vectorized]: Allocating batch matrix ({n_frames}x{win_len})")
+        print(f"[+] compute_raw_matrix [GPU]: sr={sr}, hop={hop}, win={win_len}, nfft={nfft}, frames={n_frames}")
         
         # 1. Prepare data on GPU
-        # We need to pad the samples to handle the last frame if needed
         total_len = (n_frames - 1) * hop + win_len
         if len(samples) < total_len:
             pad_len = total_len - len(samples)
@@ -329,62 +350,71 @@ def compute_raw_matrix(samples, sr, zones, fps):
         win_gpu = cp.asarray(win, dtype=cp.float32)
         freqs_gpu = cp.asarray(freqs)
         
-        # 2. Create strided view (or manual index) to form (n_frames, win_len) matrix
-        # Using stride_tricks on GPU can be tricky, let's use simple indexing for now
-        # or construct the matrix. Constructing might be memory heavy for very long songs?
-        # 8000 frames * 1200 samples * 4 bytes ~= 38MB. Totally fine for Jetson (8GB).
-        
-        # Create indices: (n_frames, 1) + (1, win_len)
+        # 2. Gather frames: (n_frames, win_len)
+        # Using simple indexing (broadcasting)
         starts = cp.arange(n_frames) * hop
         indices = starts[:, None] + cp.arange(win_len)[None, :]
-        
-        # Gather frames: (n_frames, win_len)
         frames_gpu = samples_gpu[indices]
         
-        # 3. Apply window: (n_frames, win_len)
+        # 3. Apply window
         frames_gpu *= win_gpu[None, :]
         
-        # 4. Batch FFT: (n_frames, nfft//2 + 1)
-        # axis=1 is default for rfft
+        # 4. Batch FFT
         spec_gpu = cp.abs(cp_rfft(frames_gpu, n=nfft))
         
-        # 5. Compute zone peaks (Vectorized)
-        # raw is (n_frames, n_zones)
+        # 5. Compute zone peaks
         raw_gpu = cp.zeros((n_frames, len(zones)), dtype=cp.float32)
         
         for zi, (low, high) in enumerate(zone_bounds):
-            # Create mask for this zone: (n_freqs,)
             mask = (freqs_gpu >= low) & (freqs_gpu <= high)
             if cp.any(mask):
-                # Max over the frequency axis for this zone
-                # spec_gpu[:, mask] selects columns. Then max(axis=1)
-                # Note: if mask is empty, max throws error, so we check cp.any
                 zone_slice = spec_gpu[:, mask]
                 if zone_slice.shape[1] > 0:
                     raw_gpu[:, zi] = cp.max(zone_slice, axis=1)
         
-        # 6. Copy back to CPU
         raw = cp.asnumpy(raw_gpu)
         print(f"[+] GPU processing complete.")
-        
+
     else:
-        # CPU path (original)
-        for i in range(n_frames):
-            start = i * hop
-            frame = samples[start:start+win_len]
-            if frame.size < win_len:
-                pad_width: Tuple[int, int] = (0, int(win_len - int(frame.size)))
-                frame = np.pad(frame, pad_width)
-            spec = np.abs(rfft(frame * win, n=nfft))
+        print(f"[+] compute_raw_matrix [CPU-Vectorized]: sr={sr}, hop={hop}, win={win_len}, nfft={nfft}, frames={n_frames}")
+        
+        # 1. Prepare data (Vectorized CPU)
+        total_len = (n_frames - 1) * hop + win_len
+        if len(samples) < total_len:
+            pad_len = total_len - len(samples)
+            samples = np.pad(samples, (0, pad_len))
+            
+        # 2. Create strided sliding window view (Zero-Copy)
+        # Shape: (n_frames, win_len)
+        try:
+            shape = (n_frames, win_len)
+            strides = (samples.strides[0] * hop, samples.strides[0])
+            frames = np.lib.stride_tricks.as_strided(samples, shape=shape, strides=strides)  
+        except Exception as e:
+            print(f"[!] Strided view failed, falling back to copy: {e}")
+            starts = np.arange(n_frames) * hop
+            indices = starts[:, None] + np.arange(win_len)[None, :]
+            frames = samples[indices]
 
-            for zi, (low, high) in enumerate(zone_bounds):
-                raw[i, zi] = compute_zone_peak(spec, freqs, low, high)
-
-            if (i + 1) % tick == 0 or i == n_frames - 1:
-                pct = int((i + 1) / n_frames * 100)
-                print(f"\r[FFT] {pct}% ({i+1}/{n_frames})", end='', flush=True)
+        # 3. Apply window
+        # frames is (n_frames, win_len), win is (win_len,)
+        frames_windowed = frames * win
+        
+        # 4. Batch FFT
+        spec = np.abs(rfft(frames_windowed, n=nfft, axis=1))
+        
+        # 5. Compute zone peaks (Vectorized)
+        raw = np.zeros((n_frames, len(zones)), dtype=float)
+        
+        for zi, (low, high) in enumerate(zone_bounds):
+            mask = (freqs >= low) & (freqs <= high)
+            if np.any(mask):
+                zone_slice = spec[:, mask]
+                if zone_slice.shape[1] > 0:
+                    raw[:, zi] = np.max(zone_slice, axis=1)
+        
+        print(f"[+] CPU processing complete.")
     
-    print()  # newline after progress
     return raw, n_frames
 
 # normalize raw (0..1) to quadratic brightness (0..5000)
@@ -877,9 +907,19 @@ class GlyphVisualizerAPI:
         amp_conf = conf.get("amp")
 
         samples, sr = load_audio_mono(audio_path)
-        raw, n_frames = compute_raw_matrix(samples, sr, zones, fps)
+        t_load = time.time()
+        # raw, n_frames = compute_raw_matrix(samples, sr, zones, fps) -> Moved to be timed
+
 
         # Vectorized normalization + smoothing pipeline
+        # (compute_raw_matrix moved here for timing context if needed, but it's called above in original)
+        # Wait, I need to fix the previous chunk replacement to not break code flow.
+        # Actually, let's just wrap the 'process' function body with timings in the caller, or here.
+        # Let's do it in `generate_glyph_ogg`'s executor.
+        
+        # Reverting the simple edit and doing it properly:
+        raw, n_frames = compute_raw_matrix(samples, sr, zones, fps)
+        
         linear = normalize_to_quadratic(raw)  # float matrix
         try:
             linear = apply_zone_percent_mapping(linear, zones, linear_max=5000.0)
@@ -911,7 +951,8 @@ class GlyphVisualizerAPI:
         phone_model: str = "np1",
         output_path: str = None,
         title: str = None,
-        nglyph_only: bool = False
+        nglyph_only: bool = False,
+        complexity: int = 5
     ) -> str:
         """
         Generate glyph OGG (or .nglyph if nglyph_only=True).
@@ -932,14 +973,19 @@ class GlyphVisualizerAPI:
             # PARALLEL EXECUTION OPTIMIZATION
             # Run FFT analysis (GPU) and OGG conversion (CPU/NVDEC) in parallel.
             print(f"[+] Starting Parallel Execution: FFT (GPU) + Encoding (CPU/NVDEC)")
+            t_start = time.time()
+            
             with ThreadPoolExecutor(max_workers=2) as executor:
                 future_nglyph = executor.submit(self._process_audio, audio_path, conf, nglyph_path)
                 
                 if not nglyph_only:
-                    future_ogg = executor.submit(convert_to_ogg, audio_path, ogg_path)
+                    # Pass complexity to convert_to_ogg
+                    future_ogg = executor.submit(convert_to_ogg, audio_path, ogg_path, complexity=complexity)
                 
                 # Wait for FFT results
                 future_nglyph.result()
+                t_fft = time.time()
+                print(f"[TIMING] FFT Analysis finished in {t_fft - t_start:.3f}s")
                 
                 if nglyph_only:
                     if output_path is None:
@@ -949,6 +995,9 @@ class GlyphVisualizerAPI:
                 
                 # Wait for OGG conversion
                 future_ogg.result()
+                t_ogg = time.time()
+                print(f"[TIMING] OGG Conversion finished in {t_ogg - t_start:.3f}s")
+                print(f"[TIMING] Parallel wait overhead: {max(0, t_ogg - t_fft):.3f}s")
 
             # Ensure GlyphModder is available in work_dir
             original_cwd = os.getcwd()
@@ -958,7 +1007,14 @@ class GlyphVisualizerAPI:
             finally:
                 os.chdir(original_cwd)
 
+            try:
+                download_glyphmodder_to_cwd(overwrite=False)
+            finally:
+                os.chdir(original_cwd)
+
+            t_mod_start = time.time()
             run_glyphmodder_write(nglyph_path, ogg_path, title=title, cwd=work_dir)
+            print(f"[TIMING] GlyphModder metadata write finished in {time.time() - t_mod_start:.3f}s")
 
             # Find produced file and copy to output_path
             composed_patterns = [
