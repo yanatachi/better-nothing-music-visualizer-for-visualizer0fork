@@ -14,8 +14,8 @@
 Nothing Phone公式の「ミュージック視覚化」機能は、**反応がランダムに見えたり、Glyphインターフェースのポテンシャルを最大限に活かせていない**と感じることがあります。
 このアプリは、音楽の波形をリアルタイムで精密に解析し、Nothing Phoneの背面を真のビジュアライザーへと変えるために作られました。
 
-## <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/2696_fe0f/512.gif" alt="⚖" width="32" height="32"> Nothing標準 vs Better Music Visualizer Fork
-| 内容、機能 | Nothing 標準 | **Better Music Visualizer Fork** |
+## <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/2696_fe0f/512.gif" alt="⚖" width="32" height="32"> Nothing標準 vs Better Music Visualizer (Fork)
+| 内容、機能 | Nothing 標準 | **Better Music Visualizer (Fork)** |
 | :--- | :--- | :--- |
 | **輝度レベル** | 約2ビット (3段階) | **12ビット (4096段階)** |
 | **フレームレート** | 約25 FPS | **60 FPS** |
