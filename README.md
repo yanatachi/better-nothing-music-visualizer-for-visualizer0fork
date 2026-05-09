@@ -9,7 +9,7 @@
 🇮🇳 [हिन्दी](README_HI.md)
 🇮🇳 [Marathi](README-MR.md)
 🇹🇷 [Türkçe](README_TR.md)
-🇯🇵 [日本](README_JA.md)
+🇯🇵 [日本語](README_JA.md)
 
 ## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Partying%20Face.png" alt="Partying Face" width="25" height="25" /> The Android App is here!
 We have successfully moved from the simple Python script to a powerful Android app! It grabs the live audio stream from your device using **Media Projection** and processes it directly into the glyphs. This means you can visualize music from **Spotify, YouTube Music**, and basically any other app without manual processing! No more local files only!
