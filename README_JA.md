@@ -3,10 +3,10 @@
 ## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Globe%20with%20Meridians.png" alt="Globe" width="25" height="25" />ほかの言語で読む:  🇺🇸 [English](README.md) | 🇹🇷 [Türkçe](README_TR.md)
 
 ## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Double%20Exclamation%20Mark.png" alt="Double Exclamation Mark" width="25" height="25" /> **重要なお知らせ**
-このプロジェクトはAleks levet氏(https://github.com/Aleks-Levet)の作成した[Better-Nothing-Music-Visualizer]の**フォークであり**Aleks levet氏が作成したものではありません。
+このプロジェクトは[Aleks levet氏](https://github.com/Aleks-Levet)の作成した[Better-Nothing-Music-Visualizer](https://github.com/Aleks-Levet/better-nothing-music-visualizer)の**フォークであり**[Aleks levet氏](https://github.com/Aleks-Levet)が作成したものではありません。
 
-##<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Face%20with%20Raised%20Eyebrow.png" alt="Face with Raised Eyebrow" width="25" height="25" /> どうしてこのフォークを作ったか・このフォークでは何が変わったか?
-Aleks levet氏の[Better-Nothing-Music-Visualizer]はMediaProjectionを必要とし、毎度毎度ポップアップから画面共有を許可しないといけませんし、通知も見れなくなるという欠点がありました。
+## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Face%20with%20Raised%20Eyebrow.png" alt="Face with Raised Eyebrow" width="25" height="25" /> どうしてこのフォークを作ったか・このフォークでは何が変わったか?
+[Aleks levet氏](https://github.com/Aleks-Levet)の[Better-Nothing-Music-Visualizer](https://github.com/Aleks-Levet/better-nothing-music-visualizer)はMediaProjectionを必要とし、毎度毎度ポップアップから画面共有を許可しないといけませんし、通知も見れなくなるという欠点がありました。
 そのためこのForkで音声の取得方法をMediaProjectionからVisualizer(0)にし、画面共有のポップアップをなくし、通知も見れるようにしました。
 ついでにREADME_JA.mdを追加しました。
 
@@ -14,7 +14,7 @@ Aleks levet氏の[Better-Nothing-Music-Visualizer]はMediaProjectionを必要と
 Nothing Phone公式の「ミュージック視覚化」機能は、**反応がランダムに見えたり、Glyphインターフェースのポテンシャルを最大限に活かせていない**と感じることがあります。
 このアプリは、音楽の波形をリアルタイムで精密に解析し、Nothing Phoneの背面を真のビジュアライザーへと変えるために作られました。
 
-## <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/2696_fe0f/512.gif" alt="⚖" width="32" height="32"> Nothing表y準 vs Better Music Visualizer Fork
+## <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/2696_fe0f/512.gif" alt="⚖" width="32" height="32"> Nothing標準 vs Better Music Visualizer Fork
 | 内容、機能 | Nothing 標準 | **Better Music Visualizer Fork** |
 | :--- | :--- | :--- |
 | **輝度レベル** | 約2ビット (3段階) | **12ビット (4096段階)** |
@@ -23,9 +23,9 @@ Nothing Phone公式の「ミュージック視覚化」機能は、**反応が�
 | **ゾーン** | 標準的な物理グリフ全体を使用 | **各Glyphセグメントとサブゾーンを個別に制御** |
 | **可視化手法** | リアルタイムのみ | **20ms以下の低遅延リアルタイム、または事前処理されたオーディオファイル** |
 
-## <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f3ac/512.gif" alt="🎬" width="40" height=""> [Video demos and examples](https://github.com/Aleks-Levet/better-nothing-music-visualizer/blob/main/Demo-video-examples.md)
+## <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f3ac/512.gif" alt="🎬" width="40" height=""> [動画のデモ&サンプル](https://github.com/Aleks-Levet/better-nothing-music-visualizer/blob/main/Demo-video-examples.md)
 
-### See the difference in action! [**Click here to easily browse our video demos!**](https://github.com/Aleks-Levet/better-nothing-music-visualizer/blob/main/Demo-video-examples.md)
+### 実際の違いを体感してください！ [**クリックすると簡単にサンプル動画を見ることができます！**](https://github.com/Aleks-Levet/better-nothing-music-visualizer/blob/main/Demo-video-examples.md)
 
 ## 📲 サポートされているNothing Phoneモデル
 現在、以下のモデルをサポートしています:
@@ -86,8 +86,10 @@ https://www.virustotal.com/gui/url/c92c1ff82b56eb60bfd1e159592d09f949f0ea2d195e0
 - [あけ なるかみ](https://github.com/Luke20YT) (このスクリプトを統合した音楽アプリを開発中)
 - [Interlastic](https://github.com/Interlastic) (スクリプトを簡単に試せるDiscord Bot) (非推奨)
 **このプロジェクトはGPL-3.0 ライセンスの下で公開されています。**
-Founder & Owner:Aleks-Levet
-Visualizer(0) Engine 改良:yanatachi
+  
+Founder & Owner:[Aleks-Levet](https://github.com/Aleks-Levet)
 
-### <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Star.png" alt="Star" width="25" height="25" /> Star History
+Visualizer(0) Engine 改良:[yanatachi](https://github.com/yanatachi)
+
+### <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Star.png" alt="Star" width="25" height="25" /> スターヒストリー
 ![スター履歴](https://api.star-history.com/svg?repos=Aleks-Levet/better-nothing-music-visualizer&type=Date)
