@@ -72,9 +72,9 @@ Readmeがまだ準備中なので、触りながら見つけてみてくださ�
 -新しいプリセットの作成
 -開発者との議論
 
-##  <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f512/512.gif" alt="🔒" width="25" height="25"> セキュリティー
+##  <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f512/512.gif" alt="🔒" width="25" height="25"> セキュリティ
 **VirusTotalのスキャン結果はこちらで確認できます**  
-https://www.virustotal.com/gui/url/c92c1ff82b56eb60bfd1e159592d09f949f0ea2d195e01f7f5adbef0e0b0385b?nocache=1
+[https://www.virustotal.com/gui/url/c92c1ff82b56eb60bfd1e159592d09f949f0ea2d195e01f7f5adbef0e0b0385b?nocache=1](https://www.virustotal.com/gui/file/d531d4b41997a7f4f24f5baae22aca43a706fbc7c81adbf8bbd7f6af435e95da?nocache=1)
 
 ### <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Copyright.png" alt="Copyright" width="25" height="25" /> クレジット:
 #### このプロジェクトに携わっているメンバー:
