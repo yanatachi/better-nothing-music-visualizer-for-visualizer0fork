@@ -1,6 +1,6 @@
 # <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Fire.png" alt="Fire" width="35" height="35" />Better Nothing Music Visualizer
 
-## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Globe%20with%20Meridians.png" alt="Globe" width="25" height="25" />ほかの言語で読む:  🇺🇸 [English](README.md) | 🇹🇷 [Türkçe](README_TR.md)
+## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Globe%20with%20Meridians.png" alt="Globe" width="25" height="25" />ほかの言語で読む:  🇺🇸 [English](README_EN.md) | 🇹🇷 [Türkçe](README_TR.md)
 
 ## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Double%20Exclamation%20Mark.png" alt="Double Exclamation Mark" width="25" height="25" /> **重要なお知らせ**
 このプロジェクトは[Aleks levet氏](https://github.com/Aleks-Levet)の作成した[Better-Nothing-Music-Visualizer](https://github.com/Aleks-Levet/better-nothing-music-visualizer)の**フォークであり**[Aleks levet氏](https://github.com/Aleks-Levet)が作成したものではありません。
