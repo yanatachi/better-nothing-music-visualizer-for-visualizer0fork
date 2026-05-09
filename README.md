@@ -93,4 +93,4 @@ Founder & Owner:[Aleks-Levet](https://github.com/Aleks-Levet)
 Visualizer(0) Engine 改良:[yanatachi](https://github.com/yanatachi)
 
 ### <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Star.png" alt="Star" width="25" height="25" /> スターヒストリー
-![スター履歴](https://www.star-history.com/?repos=yanatachi%2Fbetter-nothing-music-visualizer-for-visualizer0fork&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=yanatachi/better-nothing-music-visualizer-for-visualizer0fork&type=Date)](https://star-history.com/#yanatachi/better-nothing-music-visualizer-for-visualizer0fork&Date)
