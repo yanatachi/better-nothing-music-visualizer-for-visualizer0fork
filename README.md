@@ -85,6 +85,7 @@ Readmeがまだ準備中なので、触りながら見つけてみてくださ�
 - [Earnedel-lab](https://github.com/Earendel-lab) (Readmeの強化)
 - [あけ なるかみ](https://github.com/Luke20YT) (このスクリプトを統合した音楽アプリを開発中)
 - [Interlastic](https://github.com/Interlastic) (スクリプトを簡単に試せるDiscord Bot) (非推奨)
+
 **このプロジェクトはGPL-3.0 ライセンスの下で公開されています。**
   
 Founder & Owner:[Aleks-Levet](https://github.com/Aleks-Levet)
