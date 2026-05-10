@@ -8,7 +8,6 @@
 ## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Face%20with%20Raised%20Eyebrow.png" alt="Face with Raised Eyebrow" width="25" height="25" /> どうしてこのフォークを作ったか・このフォークでは何が変わったか?
 [Aleks levet氏](https://github.com/Aleks-Levet)の[Better-Nothing-Music-Visualizer](https://github.com/Aleks-Levet/better-nothing-music-visualizer)はMediaProjectionを必要とし、毎度毎度ポップアップから画面共有を許可しないといけませんし、通知も見れなくなるという欠点がありました。
 そのためこのForkで音声の取得方法をMediaProjectionからVisualizer(0)にし、画面共有のポップアップをなくし、通知も見れるようにしました。
-ついでにREADME_JA.mdを追加しました。
 
 ## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Thinking%20Face.png" alt="Thinking Face" width="25" height="25" /> なぜBetterNothingMusicVisualizerが作られたのか？
 Nothing Phone公式の「ミュージック視覚化」機能は、**反応がランダムに見えたり、Glyphインターフェースのポテンシャルを最大限に活かせていない**と感じることがあります。
