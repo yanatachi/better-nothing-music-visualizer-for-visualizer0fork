@@ -1,10 +1,7 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package com.better.nothing.music.vizualizer
 
-import com.better.nothing.music.vizualizer.R
-
-import android.view.MotionEvent
+import android.content.Context
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -19,18 +16,19 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -45,43 +43,33 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.pointerInteropFilter
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -96,7 +84,7 @@ fun ScreenTitle(text: String) {
     Text(
         text  = text,
         style = MaterialTheme.typography.displayLarge,
-        color = MaterialTheme.colorScheme.onBackground,
+        color = Color.White,
     )
 }
 
@@ -118,7 +106,7 @@ fun BodyText(
                 fontWeight = FontWeight.Normal,
             )
         },
-        color    = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+        color    = Color(0xFFB8B8B8),
         modifier = modifier,
     )
 }
@@ -129,25 +117,21 @@ fun NativeFilterChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val haptics = LocalHapticFeedback.current
     FilterChip(
         selected = selected,
-        onClick  = {
-            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-            onClick()
-        },
+        onClick  = onClick,
         label    = { Text(text = label, style = MaterialTheme.typography.labelLarge) },
         shape    = RoundedCornerShape(8.dp),
         colors   = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primary,
-            selectedLabelColor     = MaterialTheme.colorScheme.onPrimary,
-            containerColor         = Color.Transparent,
-            labelColor             = MaterialTheme.colorScheme.onSurfaceVariant,
+            selectedContainerColor = Color(0xFFDBDBDB),
+            selectedLabelColor     = Color(0xFF000000),
+            containerColor         = Color(0xFF000000),
+            labelColor             = Color(0xFF727272),
         ),
         border   = FilterChipDefaults.filterChipBorder(
             enabled             = true,
             selected            = selected,
-            borderColor         = MaterialTheme.colorScheme.outline,
+            borderColor         = Color(0xFF727272),
             selectedBorderColor = Color.Transparent,
         ),
     )
@@ -161,7 +145,6 @@ fun StartStopButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed         by interactionSource.collectIsPressedAsState()
-    val haptics           = LocalHapticFeedback.current
 
     val scale by animateFloatAsState(
         targetValue   = if (isPressed) 0.9f else 1.1f,
@@ -173,22 +156,19 @@ fun StartStopButton(
     )
 
     val containerColor by animateColorAsState(
-        targetValue   = if (running) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+        targetValue   = if (running) Color(0xFFE53935) else Color(0xFFB5F2B6),
         animationSpec = tween(600, easing = EaseInOutCubic),
         label         = "containerColor"
     )
 
     val contentColor by animateColorAsState(
-        targetValue   = if (running) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSecondary,
+        targetValue   = if (running) Color.White else Color(0xFF1C5A21),
         animationSpec = tween(600, easing = EaseInOutCubic),
         label         = "contentColor"
     )
 
     FloatingActionButton(
-        onClick           = {
-            haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-            onClick()
-        },
+        onClick           = onClick,
         interactionSource = interactionSource,
         shape             = RoundedCornerShape(15.dp),
         modifier          = modifier
@@ -215,7 +195,7 @@ fun StartStopButton(
                 )
             }
             Text(
-                text  = stringResource(if (running) R.string.stop_visualizer else R.string.start_visualizer),
+                text  = if (running) "Stop visualizer" else "Start visualizer",
                 style = MaterialTheme.typography.labelLarge.copy(
                     fontWeight    = FontWeight.Medium,
                     letterSpacing = 0.5.sp
@@ -233,7 +213,8 @@ fun NativeBottomBar(
 ) {
     NavigationBar(
         modifier = Modifier
-            .heightIn(50.dp)
+            .height(64.dp)
+            .navigationBarsPadding()
             .animateContentSize(
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
@@ -242,17 +223,13 @@ fun NativeBottomBar(
             ),
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        windowInsets = NavigationBarDefaults.windowInsets
+        windowInsets = WindowInsets(0)
     ) {
         visibleTabs.forEach { tab ->
             val isSelected = tab == selectedTab
             NavigationBarItem(
                 selected = isSelected,
-                onClick = {
-                    if (!isSelected) {
-                        onTabSelected(tab)
-                    }
-                },
+                onClick = { onTabSelected(tab) },
                 label = {
                     Text(
                         text = tab.label,
@@ -261,20 +238,23 @@ fun NativeBottomBar(
                     )
                 },
                 icon = {
-                    when (tab) {
-                        Tab.Audio -> Icon(Icons.AutoMirrored.Filled.VolumeUp, tab.label)
-                        Tab.Glyphs -> Icon(painter = painterResource(R.drawable.ic_nav_glyphs), contentDescription = tab.label)
-                        Tab.Haptics -> Icon(Icons.Filled.Vibration, tab.label)
-                        Tab.Settings -> Icon(Icons.Filled.Settings, tab.label)
-                        Tab.About -> Icon(Icons.Filled.Info, tab.label)
-                    }
+                    Icon(
+                        imageVector = when (tab) {
+                            Tab.Audio -> Icons.AutoMirrored.Filled.VolumeUp
+                            Tab.Glyphs -> Icons.Filled.GraphicEq
+                            Tab.Haptics -> Icons.Filled.Vibration
+                            Tab.Settings -> Icons.Filled.Settings
+                            Tab.About -> Icons.Filled.Info
+                        },
+                        contentDescription = tab.label
+                    )
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    indicatorColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                     selectedIconColor = MaterialTheme.colorScheme.onBackground,
                     selectedTextColor = MaterialTheme.colorScheme.onBackground,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurface,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurface
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             )
         }
@@ -287,7 +267,8 @@ fun ExpressiveSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
     valueRange: ClosedFloatingPointRange<Float>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enableHaptics: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val haptics = LocalHapticFeedback.current
@@ -296,18 +277,13 @@ fun ExpressiveSlider(
     val isDragged by interactionSource.collectIsDraggedAsState()
     val isActive = isPressed || isDragged
 
-    val wasActive = remember { mutableStateOf(false) }
-
-    // Trigger haptic on Press/Release (skip initial state)
+    // Trigger haptic on Press/Release
     LaunchedEffect(isActive) {
-        if (!wasActive.value && isActive) {
-            // Trigger on press (transition from false to true)
+        if (isActive) {
             haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-        } else if (wasActive.value && !isActive) {
-            // Trigger on release (transition from true to false)
+        } else {
             haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
         }
-        wasActive.value = isActive
     }
 
     // The "Expressive" factor (1.0 to 1.8)
@@ -320,32 +296,20 @@ fun ExpressiveSlider(
         label = "expressive_bounce"
     )
 
-    val view = LocalView.current
+    val previousValue = remember { mutableIntStateOf(value.toInt()) }
+
     Slider(
         value = value,
         onValueChange = { newValue ->
             onValueChange(newValue)
+            if (enableHaptics && newValue.toInt() != previousValue.intValue) {
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                previousValue.intValue = newValue.toInt()
+            }
         },
         valueRange = valueRange,
         interactionSource = interactionSource,
-        modifier = modifier
-            .height(56.dp)
-            .pointerInput(isActive) {
-                if (isActive) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
-                            event.changes.forEach { if (it.pressed) it.consume() }
-                        }
-                    }
-                }
-            }
-            .pointerInteropFilter { motionEvent ->
-                if (motionEvent.action == MotionEvent.ACTION_DOWN) {
-                    view.parent?.requestDisallowInterceptTouchEvent(true)
-                }
-                false
-            },
+        modifier = modifier.height(56.dp), // Extra height for the "bloom"
         thumb = {
             // THUMB: Gets THINNER as animationFactor increases
             // Width: 4dp -> 2dp | Height: 44dp -> 48dp
@@ -373,113 +337,12 @@ fun ExpressiveSlider(
                 trackInsideCornerSize = 2.dp,
                 colors = SliderDefaults.colors(
                     activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    inactiveTrackColor = Color(0xFF1C1B1B)
                 )
             )
         }
     )
 }
-
-@Composable
-fun ExpressiveRangeSlider(
-    value: ClosedFloatingPointRange<Float>,
-    onValueChange: (ClosedFloatingPointRange<Float>) -> Unit,
-    valueRange: ClosedFloatingPointRange<Float>,
-    modifier: Modifier = Modifier
-) {
-    val startInteractionSource = remember { MutableInteractionSource() }
-    val endInteractionSource = remember { MutableInteractionSource() }
-    val haptics = LocalHapticFeedback.current
-
-    val startActive by startInteractionSource.collectIsPressedAsState()
-    val startDragged by startInteractionSource.collectIsDraggedAsState()
-    val endActive by endInteractionSource.collectIsPressedAsState()
-    val endDragged by endInteractionSource.collectIsDraggedAsState()
-
-    val isAnyActive = startActive || startDragged || endActive || endDragged
-    val wasActive = remember { mutableStateOf(false) }
-
-    // Trigger haptic on Press/Release (skip initial state)
-    LaunchedEffect(isAnyActive) {
-        if (!wasActive.value && isAnyActive) {
-            // Trigger on press (transition from false to true)
-            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-        } else if (wasActive.value && !isAnyActive) {
-            // Trigger on release (transition from true to false)
-            haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
-        }
-        wasActive.value = isAnyActive
-    }
-
-    // Animation and Haptic logic remains the same...
-    val animationFactor by animateFloatAsState(
-        targetValue = if (isAnyActive) 2.1f else 1.0f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
-        label = "track_bloom"
-    )
-
-    val startThumbFactor by animateFloatAsState(if (startActive || startDragged) 2.1f else 1.0f)
-    val endThumbFactor by animateFloatAsState(if (endActive || endDragged) 2.1f else 1.0f)
-
-    val view = LocalView.current
-    RangeSlider(
-        value = value,
-        onValueChange = onValueChange,
-        valueRange = valueRange,
-        startInteractionSource = startInteractionSource,
-        endInteractionSource = endInteractionSource,
-        modifier = modifier
-            .height(64.dp)
-            .pointerInput(isAnyActive) {
-                if (isAnyActive) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
-                            event.changes.forEach { if (it.pressed) it.consume() }
-                        }
-                    }
-                }
-            }
-            .pointerInteropFilter { motionEvent ->
-                if (motionEvent.action == MotionEvent.ACTION_DOWN) {
-                    view.parent?.requestDisallowInterceptTouchEvent(true)
-                }
-                false
-            },
-        startThumb = { ExpressiveThumb(factor = startThumbFactor) },
-        endThumb = { ExpressiveThumb(factor = endThumbFactor) },
-        track = { rangeSliderState ->
-            val trackHeight = 12.dp * animationFactor
-            SliderDefaults.Track(
-                rangeSliderState = rangeSliderState,
-                modifier = Modifier.height(trackHeight),
-                thumbTrackGapSize = 4.dp,
-                drawStopIndicator = null,
-                colors = SliderDefaults.colors(
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            )
-        }
-    )
-}
-
-@Composable
-private fun ExpressiveThumb(factor: Float) {
-    // The thumb gets thinner and taller when grabbed
-    val thumbWidth = 4.dp / factor
-    val thumbHeight = 40.dp * (factor * 0.8f).coerceAtLeast(1f)
-
-    Box(
-        modifier = Modifier
-            .size(width = thumbWidth, height = thumbHeight)
-            .background(
-                color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(2.dp)
-            )
-    )
-}
-
 val NTypeFontFamily = FontFamily(
     Font(R.font.ntype82)
 )
@@ -503,106 +366,39 @@ data class AppSpacing(
 val LocalAppSpacing = staticCompositionLocalOf { AppSpacing() }
 
 @Composable
-fun BetterVizTheme(
-    themeName: String = "OLED Black",
-    fontName: String = "NDot",
-    content: @Composable () -> Unit
-) {
+fun BetterVizTheme(content: @Composable () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = context.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
+    val themeName = prefs.getString("selected_theme", "Normal") ?: "Normal"
+    val isNothingRed = themeName == "Nothing Red"
+    val fontName = prefs.getString("selected_font", "NDot") ?: "NDot"
     val useNType = fontName == "NType"
-    val context = LocalContext.current
 
-    val targetColorScheme = when (themeName) {
-        "Material You" -> {
-            dynamicDarkColorScheme(context)
-        }
-        "Material You Light" -> {
-            dynamicLightColorScheme(context)
-        }
-        "Nothing Red" -> {
-            androidx.compose.material3.darkColorScheme(
-                background = Color.Black,
-                surface = Color(0xFF0D0D0D),
-                primary = Color(0xFFEE0000),    // Authentic Nothing Red
-                secondary = Color(0xFFEE0000),
-                error = Color(0xFFEE0000),
-                onBackground = Color.White,
-                onSurface = Color.White,
-                onPrimary = Color.White,
-                onSecondary = Color.White,
-                onError = Color.White,
-                surfaceVariant = Color(0xFF1A1A1A),
-                onSurfaceVariant = Color(0xFFB3B3B3),
-                outline = Color(0xFF333333)
-            )
-        }
-        "Liquorice Black" -> {
-            androidx.compose.material3.darkColorScheme(
-                background = Color(0xFF0F0F0F),
-                surface = Color(0xFF1A1A1A),
-                primary = Color(0xFFD8D3DA),
-                secondary = Color(0xFFA0FFA3),
-                error = Color(0xFFC83B3B),
-                onBackground = Color.White,
-                onSurface = Color.White,
-                onPrimary = Color(0xFF1C1A1D),
-                onSecondary = Color(0xFF1C5A21),
-                onError = Color.White,
-                surfaceVariant = Color(0xFF242424),
-                onSurfaceVariant = Color(0xFF676767),
-                outline = Color(0xFF2C2C2C)
-            )
-        }
-        "Nothing Light" -> {
-            androidx.compose.material3.lightColorScheme(
-                background = Color.White,
-                surface = Color(0xFFF5F5F5),
-                primary = Color(0xFF000000),
-                secondary = Color(0xFF626262),
-                error = Color(0xFFEE0000),
-                onBackground = Color.Black,
-                onSurface = Color.Black,
-                onPrimary = Color.White,
-                onSecondary = Color.White,
-                onError = Color.White,
-                surfaceVariant = Color(0xFFE0E0E0),
-                onSurfaceVariant = Color(0xFF757575),
-                outline = Color(0xFFBDBDBD)
-            )
-        }
-        else -> { // OLED Black / Default
-            androidx.compose.material3.darkColorScheme(
-                background = Color.Black,
-                surface = Color(0xFF1A1A1A),
-                primary = Color(0xFFD8D3DA),
-                secondary = Color(0xFFA0FFA3),
-                error = Color(0xFFC83B3B),
-                onBackground = Color.White,
-                onSurface = Color.White,
-                onPrimary = Color(0xFF1C1A1D),
-                onSecondary = Color(0xFF1C5A21),
-                onError = Color.White,
-                surfaceVariant = Color(0xFF242424),
-                onSurfaceVariant = Color(0xFF676767),
-                outline = Color(0xFF2C2C2C)
-            )
-        }
+    val colorScheme = if (isNothingRed) {
+        androidx.compose.material3.darkColorScheme(
+            background = Color(0xFF000000),
+            surface = Color(0xFF0A0A0A),
+            primary = Color(0xFFEF4444),
+            secondary = Color(0xFFEF4444),
+            onBackground = Color(0xFFF5F5F5),
+            onSurface = Color(0xFFF5F5F5),
+            onPrimary = Color(0xFF000000),
+            surfaceVariant = Color(0xFF111111),
+            onSecondary = Color(0xFF000000)
+        )
+    } else {
+        androidx.compose.material3.darkColorScheme(
+            background = Color.Black,
+            surface = Color(0xFF242222),
+            primary = Color(0xFFD8D3DA),
+            secondary = Color(0xFFB5F2B6),
+            onBackground = Color.White,
+            onSurface = Color.White,
+            onPrimary = Color(0xFF1C1A1D),
+            surfaceVariant = Color(0xFF3D3C41),
+            onSecondary = Color.White
+        )
     }
-
-    val colorScheme = targetColorScheme.copy(
-        primary = animateColorAsState(targetColorScheme.primary, tween(500)).value,
-        onPrimary = animateColorAsState(targetColorScheme.onPrimary, tween(500)).value,
-        secondary = animateColorAsState(targetColorScheme.secondary, tween(500)).value,
-        onSecondary = animateColorAsState(targetColorScheme.onSecondary, tween(500)).value,
-        error = animateColorAsState(targetColorScheme.error, tween(500)).value,
-        onError = animateColorAsState(targetColorScheme.onError, tween(500)).value,
-        background = animateColorAsState(targetColorScheme.background, tween(500)).value,
-        onBackground = animateColorAsState(targetColorScheme.onBackground, tween(500)).value,
-        surface = animateColorAsState(targetColorScheme.surface, tween(500)).value,
-        onSurface = animateColorAsState(targetColorScheme.onSurface, tween(500)).value,
-        surfaceVariant = animateColorAsState(targetColorScheme.surfaceVariant, tween(500)).value,
-        onSurfaceVariant = animateColorAsState(targetColorScheme.onSurfaceVariant, tween(500)).value,
-        outline = animateColorAsState(targetColorScheme.outline, tween(500)).value,
-    )
 
     val typography = Typography(
         // HEADERS
@@ -645,7 +441,7 @@ fun BetterVizTheme(
         ),
     )
     CompositionLocalProvider(LocalAppSpacing provides AppSpacing()) {
-        MaterialTheme(
+        androidx.compose.material3.MaterialTheme(
             colorScheme = colorScheme,
             shapes = Shapes(
                 extraLarge = RoundedCornerShape(32.dp),

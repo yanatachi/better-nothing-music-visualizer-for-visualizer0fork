@@ -1,18 +1,14 @@
 package com.better.nothing.music.vizualizer
 
-import android.content.Context
-import android.os.Build
-import android.provider.Settings
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -38,30 +35,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.pow
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun GlyphsScreen(
+fun GlyphsScreen(
     gammaValue: Float,
     onGammaChanged: (Float) -> Unit,
     presets: List<AudioCaptureService.PresetInfo>,
     selectedPreset: String,
     onPresetSelected: (String) -> Unit,
-    isRunning: Boolean,
-    selectedDevice: Int,
-    viewModel: MainViewModel,
 ) {
     val mainScrollState = rememberScrollState()
-    val context = LocalContext.current
+    val chipScrollState = rememberScrollState() // Separate state for the chips
 
+    // selectedInfo is re-calculated only when relevant data changes
     val selectedInfo = remember(selectedPreset, presets) {
         presets.firstOrNull { it.key == selectedPreset } ?: presets.firstOrNull()
     }
@@ -69,27 +58,17 @@ internal fun GlyphsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(mainScrollState)
-            .padding(horizontal = 8.dp)
-            .animateContentSize(spring(stiffness = Spring.StiffnessLow)),
+            .statusBarsPadding()
+            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .verticalScroll(mainScrollState),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Spacer(modifier = Modifier.height(50.dp))
-
-        ScreenTitle(text = stringResource(R.string.glyph_controls))
-
-        if (selectedDevice == DeviceProfile.DEVICE_NP1 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            if (!isGlyphDebugEnabled(context)) {
-                GlyphDebugWarningCard(
-                    developerModeEnabled = isDeveloperOptionsEnabled(context)
-                )
-            }
-        }
+        ScreenTitle(text = "Glyph controls")
 
         Text(
-            text = stringResource(R.string.gamma_control),
+            text = "Gamma control",
             style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = Color(0xFFD2D2D2),
         )
 
         Row(
@@ -99,7 +78,8 @@ internal fun GlyphsScreen(
         ) {
             GammaPreviewCard(gammaValue = gammaValue)
             BodyText(
-                text = stringResource(R.string.gamma_description),
+                text = "A higher gamma value gives a more punchy look, but with less subtle details " +
+                        "and overall brightness. A lower one is brighter but less punchy.",
                 modifier = Modifier.weight(1f),
                 size = 14.sp,
                 lineHeight = 22.sp,
@@ -109,23 +89,26 @@ internal fun GlyphsScreen(
         GammaCard(gammaValue = gammaValue, onGammaChanged = onGammaChanged)
 
         Text(
-            text = stringResource(R.string.visualizer_presets),
+            text = "Visualizer presets",
             modifier = Modifier.padding(top = 20.dp),
             style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = Color(0xFFD2D2D2),
         )
 
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
+        // The Horizontal Scroll Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(chipScrollState), // Use the remembered state here
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             presets.forEach { preset ->
+                // Keying helps Compose track the identity of the chip
                 key(preset.key) {
                     NativeFilterChip(
-                        label = preset.key,
+                        label    = preset.key,
                         selected = preset.key == selectedPreset,
-                        onClick = { onPresetSelected(preset.key) },
+                        onClick  = { onPresetSelected(preset.key) },
                     )
                 }
             }
@@ -133,41 +116,34 @@ internal fun GlyphsScreen(
 
         Card(
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF242222)),
             modifier = Modifier
                 .fillMaxWidth()
+                // KEY: This modifier must be on the container that needs to resize.
+                // Putting it here ensures the Card's height morphs with a bounce.
                 .animateContentSize(
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
+                        stiffness = Spring.StiffnessLow // Low stiffness makes the "morph" feel heavier and more organic
                     )
                 ),
         ) {
             Crossfade(
                 targetState = selectedInfo?.description,
                 label = "desc_fade",
+                // Speed up the fade slightly so it happens during the morph
                 animationSpec = spring(stiffness = Spring.StiffnessMedium)
             ) { description ->
                 Text(
-                    text = description ?: stringResource(R.string.glyph_no_config),
+                    text = description ?: "Text describing the preset in a nice way.",
                     style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
-                    color = Color(0xFFFFFFFF),
+                    color = Color(0xFFBABABA),
                     modifier = Modifier
                         .padding(20.dp)
+                        // Ensure the text fills the width so the height is calculated correctly
                         .fillMaxWidth(),
                 )
             }
-        }
-
-        if (isRunning) {
-            val vizState by viewModel.visualizerState.collectAsStateWithLifecycle()
-            GlyphPreview(
-                vizState = vizState,
-                device = selectedDevice,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(400.dp)
-            )
         }
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -175,71 +151,18 @@ internal fun GlyphsScreen(
 }
 
 @Composable
-private fun GlyphDebugWarningCard(
-    developerModeEnabled: Boolean,
-) {
-    Card(
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.glyph_debug_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            BodyText(
-                text = stringResource(if (developerModeEnabled) R.string.glyph_debug_desc_adb_enabled else R.string.glyph_debug_desc_dev_options)
-            )
-            Text(
-                text = stringResource(R.string.glyph_debug_command),
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.bodyLarge,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium,
-            )
-            if (developerModeEnabled) {
-                BodyText(
-                    text = stringResource(R.string.glyph_debug_instruction),
-                    size = 14.sp,
-                    lineHeight = 20.sp,
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(70.dp))
-    }
-}
-
-private fun isDeveloperOptionsEnabled(context: Context): Boolean {
-    return Settings.Global.getInt(
-        context.contentResolver,
-        Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
-        0
-    ) == 1
-}
-
-private fun isGlyphDebugEnabled(context: Context): Boolean {
-    return Settings.Global.getInt(
-        context.contentResolver,
-        "nt_glyph_interface_debug_enable",
-        0
-    ) == 1
-}
-
-@Composable
 fun GammaCard(
     gammaValue: Float,
     onGammaChanged: (Float) -> Unit,
 ) {
-    val gammaLabel = stringResource(R.string.light_gamma).format(gammaValue)
+    // Format only when gammaValue changes, not every recomposition.
+    val gammaLabel = remember(gammaValue) {
+        "Light Gamma: ${"%.2f".format(gammaValue)}"
+    }
 
     Card(
         shape    = RoundedCornerShape(28.dp),
-        colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors   = CardDefaults.cardColors(containerColor = Color(0xFF242222)),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -248,7 +171,7 @@ fun GammaCard(
         ) {
             Text(
                 text     = gammaLabel,
-                color    = MaterialTheme.colorScheme.primary,
+                color    = Color(0xFFE8E0EC),
                 style    = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
@@ -273,42 +196,42 @@ fun GammaPreviewCard(gammaValue: Float) {
         label = "gamma_curve",
     )
 
+    // Allocate the Path once; reset() and refill it on each draw call.
     val curvePath = remember { Path() }
-
-    val gridColor = MaterialTheme.colorScheme.outline
-    val accent    = MaterialTheme.colorScheme.primary
 
     Card(
         shape    = RoundedCornerShape(28.dp),
-        colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors   = CardDefaults.cardColors(containerColor = Color(0xFF242222)),
         modifier = Modifier.size(130.dp, 130.dp),
     ) {
         Canvas(modifier = Modifier.fillMaxSize().padding(18.dp)) {
+            val gridColor = Color(0xFF4C494C)
+            val accent    = Color(0xFFE6E0EB)
             val pad       = 8f
+            val left   = pad
+            val top    = pad
             val right  = size.width - pad
             val bottom = size.height - pad
-            val w = right - pad
-            val h = bottom - pad
+            val w = right - left
+            val h = bottom - top
 
-            drawLine(gridColor, Offset(pad, bottom), Offset(right, bottom), strokeWidth = 4f, cap = StrokeCap.Round)
-            drawLine(gridColor, Offset(pad, bottom), Offset(pad, pad),    strokeWidth = 4f, cap = StrokeCap.Round)
+            drawLine(gridColor, Offset(left, bottom), Offset(right, bottom), strokeWidth = 4f, cap = StrokeCap.Round)
+            drawLine(gridColor, Offset(left, bottom), Offset(left, top),    strokeWidth = 4f, cap = StrokeCap.Round)
 
             val hStep = h / 4f
             val vStep = w / 4f
             repeat(3) { i ->
-                drawLine(gridColor, Offset(pad,         bottom - hStep * (i + 1)), Offset(right, bottom - hStep * (i + 1)), strokeWidth = 1f)
-                drawLine(gridColor, Offset(pad + vStep * (i + 1), bottom),         Offset(pad + vStep * (i + 1),
-                    pad
-                ),     strokeWidth = 1f)
+                drawLine(gridColor, Offset(left,         bottom - hStep * (i + 1)), Offset(right, bottom - hStep * (i + 1)), strokeWidth = 1f)
+                drawLine(gridColor, Offset(left + vStep * (i + 1), bottom),         Offset(left + vStep * (i + 1), top),     strokeWidth = 1f)
             }
 
             curvePath.reset()
-            curvePath.moveTo(pad, bottom)
-            val steps = 50
+            curvePath.moveTo(left, bottom)
+            val steps = 20
             for (step in 1..steps) {
                 val x = step / steps.toFloat()
                 val y = x.pow(animatedGamma)
-                curvePath.lineTo(pad + x * w, bottom - y * h)
+                curvePath.lineTo(left + x * w, bottom - y * h)
             }
             drawPath(curvePath, accent, style = Stroke(width = 8f, cap = StrokeCap.Round))
         }

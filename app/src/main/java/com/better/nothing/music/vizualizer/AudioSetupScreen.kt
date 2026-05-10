@@ -2,49 +2,21 @@ package com.better.nothing.music.vizualizer
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,11 +24,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -70,7 +44,7 @@ fun AudioScreen(
     onLatencyPresetsChanged: (List<Int>) -> Unit,
     autoDeviceEnabled: Boolean,
     onAutoDeviceToggle: (Boolean) -> Unit,
-    connectedDeviceName: String? = null,
+    connectedDeviceName: String? = null
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -87,49 +61,56 @@ fun AudioScreen(
     // Logic to handle the toggle with permission check
     val handleAutoToggle: (Boolean) -> Unit = { setEnabled ->
         if (setEnabled) {
-            val status = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.BLUETOOTH_CONNECT
-            )
-            if (status == PackageManager.PERMISSION_GRANTED) {
-                onAutoDeviceToggle(true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val status = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                )
+                if (status == PackageManager.PERMISSION_GRANTED) {
+                    onAutoDeviceToggle(true)
+                } else {
+                    permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                }
             } else {
-                permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                onAutoDeviceToggle(true)
             }
         } else {
-            onAutoDeviceToggle(true)
+            onAutoDeviceToggle(false)
         }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp)
+            .statusBarsPadding()
+            .padding(horizontal = 8.dp, vertical = 8.dp)
             .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        Spacer(modifier = Modifier.height(50.dp))
-
-        ScreenTitle(text = stringResource(R.string.audio_screen_title))
+        ScreenTitle(text = "Better Nothing\nMusic Visualizer")
 
         val descriptionText = if (isRunning) {
-            stringResource(R.string.audio_description_running)
+            "Real time audio visualizer is active. Your phone is now dancing to the beat! " +
+                    "No content is saved, and privacy is respected."
         } else {
-            stringResource(R.string.audio_description_idle)
+            "To synchronize the Glyph Interface with your music, this app captures " +
+                    "device audio. We use Media Projection for high-fidelity visualization.\n\n" +
+                    "Privacy Note: We only utilize the audio stream. No screen content is recorded."
         }
         BodyText(text = descriptionText)
 
         AnimatedVisibility(visible = isRunning) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
-                BodyText(
-                    text = stringResource(R.string.latency_compensation_description)
-                )
-
                 AutoDeviceCard(
                     enabled = autoDeviceEnabled,
                     onToggle = handleAutoToggle,
                     deviceName = connectedDeviceName
+                )
+
+                BodyText(
+                    text = "Latency compensation ensures Glyphs hit exactly on the beat, " +
+                            "especially useful for Bluetooth devices."
                 )
 
                 LatencyCard(
@@ -140,7 +121,6 @@ fun AudioScreen(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(70.dp))
     }
 }
 
@@ -152,7 +132,7 @@ fun AutoDeviceCard(
 ) {
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1B1B)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -164,15 +144,15 @@ fun AutoDeviceCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.auto_memorize_device),
-                    color = MaterialTheme.colorScheme.onSurface,
+                    text = "Auto-Memorize Device",
+                    color = Color.White,
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
                     text = if (enabled)
-                        stringResource(R.string.saving_latency_for, deviceName ?: stringResource(R.string.internal_speaker))
-                    else stringResource(R.string.manual_mode_global_latency),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        "Saving latency for: ${deviceName ?: "Internal Speaker"}"
+                    else "Manual mode (Global latency)",
+                    color = Color.Gray,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -180,7 +160,7 @@ fun AutoDeviceCard(
                 checked = enabled,
                 onCheckedChange = onToggle,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedThumbColor = Color(0xFF000000),
                     checkedTrackColor = MaterialTheme.colorScheme.primary
                 )
             )
@@ -203,14 +183,8 @@ fun LatencyCard(
             .map { it.first }
     }
 
-    // Play a tick when presets swap positions
-    var isFirstOrderChange by remember { mutableStateOf(true) }
     LaunchedEffect(visualOrder) {
-        if (isFirstOrderChange) {
-            isFirstOrderChange = false
-            return@LaunchedEffect
-        }
-        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
     }
 
     val activeIndex = if (draggingIndex != -1) draggingIndex else latencyPresets.indexOf(latencyMs)
@@ -235,7 +209,7 @@ fun LatencyCard(
 
     Card(
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF242222)),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -243,11 +217,9 @@ fun LatencyCard(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = stringResource(R.string.latency_compensation),
+                text = "Latency Compensation",
                 color = Color(0xFFE6E1E3),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.fillMaxWidth(), // Necessary to see the alignment effect
-                textAlign = TextAlign.Center
+                style = MaterialTheme.typography.titleMedium
             )
 
             // --- Presets Selector ---
@@ -255,7 +227,7 @@ fun LatencyCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(24.dp))
+                    .background(Color(0xFF1C1B1B), RoundedCornerShape(24.dp))
                     .padding(4.dp)
             ) {
                 val spacing = 4.dp
@@ -278,7 +250,7 @@ fun LatencyCard(
                             .fillMaxHeight()
                             .offset(x = animatedX)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF2B2929))
                             .clickable {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 draggingIndex = index
@@ -288,7 +260,7 @@ fun LatencyCard(
                     ) {
                         Text(
                             text = "${preset}ms",
-                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            color = if (isSelected) Color.Black else Color(0xFFE6E1E3),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
@@ -360,7 +332,7 @@ fun RowScope.FineTuneButton(
     )
 
     val containerColor by animateColorAsState(
-        targetValue = if (isAnimating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        targetValue = if (isAnimating) MaterialTheme.colorScheme.primary else Color(0xFF2B2929),
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "color_fade"
     )
@@ -378,7 +350,7 @@ fun RowScope.FineTuneButton(
             Text(
                 text = if (amount > 0) "+$amount" else "$amount",
                 style = MaterialTheme.typography.labelMedium,
-                color = if (isAnimating)  MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                color = if (isAnimating)  Color(0xFF000000) else MaterialTheme.colorScheme.primary,
                 fontWeight = if (isAnimating) FontWeight.ExtraBold else FontWeight.Medium
             )
         }

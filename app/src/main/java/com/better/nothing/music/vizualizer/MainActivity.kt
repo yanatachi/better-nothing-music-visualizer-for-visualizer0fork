@@ -4,7 +4,7 @@
 ////////
 //////////
 ////////////
-// TO DO LIST HEREEEE:::::
+// TODO LIST HEREEEE:::::
 ////////////////
 //https://taskweb.pages.dev/?board=mauv5VZ29Gw1vnbExSXb#
 ////////////////
@@ -15,7 +15,28 @@
 //////
 ////
 //
+
+///////////////////////////////////////////////////////////
+CHANGELOG HERE PLEASE: 2.7 TO 2.8:
+
+2.8 changes:
+- Removed legacy hardcoded preset fallback logic and old vocal/bass leftovers from the active runtime path.
+- Refactored AudioCaptureService so capture and preset processing are driven by zones.config without duplicated setup code.
+- Improved foreground/background service behavior, including cleaner lifecycle handling and quick settings tile refreshes.
+- Added live audio route monitoring with AudioDeviceCallback for proper Bluetooth, wired, and speaker hot swapping.
+- Fixed auto device memorization so the selected output updates without needing an app restart.
+- Fixed latency persistence so each audio route/device can save and restore its own latency value automatically.
+- Added a new Haptics tab with a vibration icon and placeholder page.
+- Cleaned up old settings/resource leftovers and restored the adaptive launcher background color resource.
+- Added fine controls to the latency compensation setting
+- Fixed colors
+- Added NType font
+- More bouncy and snappy animations
+- Added more haptics at good places
+
+///////////////////////////////////////////////////////////
 */
+
 
 package com.better.nothing.music.vizualizer
 
@@ -29,12 +50,7 @@ import android.content.pm.PackageManager
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.media.projection.MediaProjectionManager
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -47,31 +63,32 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresPermission
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.EaseOutQuart
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
 import androidx.core.content.ContextCompat
-import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -81,12 +98,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import kotlin.math.absoluteValue
-import kotlin.math.sqrt
 
 
 // ─── Tab ─────────────────────────────────────────────────────────────────────
@@ -95,6 +106,10 @@ import kotlin.math.sqrt
 enum class Tab(val label: String) {
     Audio("Audio"), Glyphs("Glyphs"), Haptics("Haptics"), Settings("Settings"), About("About");
 
+    companion object {
+        // Allocated once at class-load time; never re-allocated during recomposition.
+        val all: List<Tab> = entries
+    }
 }
 
 private data class AudioRoute(
@@ -106,7 +121,7 @@ private data class AudioRoute(
 //
 // All mutable state lives here as MutableStateFlow so that:
 //   • State survives configuration changes — no full UI rebuild on rotation.
-//   • Collectors only recomposes the subtree that reads a particular flow.
+//   • Collectors only recompose the subtree that reads a particular flow.
 //   • All IO / CPU work is dispatched off the main thread.
 
 internal class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -122,45 +137,6 @@ internal class MainViewModel(application: Application) : AndroidViewModel(applic
     // Exposed as MutableStateFlow (not just a val) so the Activity can always
     // read the latest device synchronously when binding the service.
     val selectedDevice = MutableStateFlow(DeviceProfile.DEVICE_NP2)
-
-    private val _developerModeEnabled = MutableStateFlow(false)
-    val developerModeEnabled = _developerModeEnabled.asStateFlow()
-
-    private val _spoofedDevice = MutableStateFlow(DeviceProfile.DEVICE_NP1)
-    val spoofedDevice = _spoofedDevice.asStateFlow()
-
-    fun setDeveloperModeEnabled(enabled: Boolean) {
-        _developerModeEnabled.value = enabled
-        updateSelectedDevice()
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putBoolean("developer_mode_enabled", enabled) }
-        }
-    }
-
-    fun setSpoofedDevice(device: Int) {
-        _spoofedDevice.value = device
-        if (_developerModeEnabled.value) {
-            updateSelectedDevice()
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putInt("spoofed_device", device) }
-        }
-    }
-
-    private fun updateSelectedDevice() {
-        val actualDevice = DeviceProfile.detectDevice()
-        val targetDevice = if (_developerModeEnabled.value) _spoofedDevice.value else actualDevice
-
-        if (selectedDevice.value != targetDevice) {
-            selectedDevice.value = targetDevice
-            refreshPresets()
-            reloadLatencyForCurrentRoute()
-            // Forward to service if bound
-            MainActivity.serviceStatic?.setDevice(targetDevice)
-        }
-    }
 
     // ── Latency ───────────────────────────────────────────────────────────────
     private val _latencyMs = MutableStateFlow(0)
@@ -214,208 +190,16 @@ internal class MainViewModel(application: Application) : AndroidViewModel(applic
     private val _connectedDeviceKey = MutableStateFlow<String?>(null)
 
     private val _glyphTabEnabled = MutableStateFlow(true)
+    val glyphTabEnabled = _glyphTabEnabled.asStateFlow()
 
     private val _hapticsTabEnabled = MutableStateFlow(true)
-
-    private val _idleBreathingEnabled = MutableStateFlow(false)
-    val idleBreathingEnabled = _idleBreathingEnabled.asStateFlow()
-
-    private val _idlePattern = MutableStateFlow("pulse")
-    val idlePattern = _idlePattern.asStateFlow()
-
-    private val _notificationFlashEnabled = MutableStateFlow(false)
-    val notificationFlashEnabled = _notificationFlashEnabled.asStateFlow()
-
-    // ── Zones Update ──────────────────────────────────────────────────────────
-    private val _configUpdateStatus = MutableStateFlow<ConfigUpdateStatus>(ConfigUpdateStatus.Idle)
-    val configUpdateStatus = _configUpdateStatus.asStateFlow()
-
-    sealed class ConfigUpdateStatus {
-        object Idle : ConfigUpdateStatus()
-        object Updating : ConfigUpdateStatus()
-        data class Success(val message: String) : ConfigUpdateStatus()
-        data class Error(val message: String) : ConfigUpdateStatus()
-    }
-
-    // FIXED: Proper thread handling for network and UI updates
-    fun updateZonesConfig() {
-        // 1. Set loading state immediately on Main Thread
-        _configUpdateStatus.value = ConfigUpdateStatus.Updating
-
-        viewModelScope.launch {
-            try {
-                // 2. Perform network/download on IO Thread
-                val success = withContext(Dispatchers.IO) {
-                    performUpdateAction()
-                }
-
-                // 3. Back on Main Thread automatically after withContext
-                if (success) {
-                    _configUpdateStatus.value = ConfigUpdateStatus.Success("Successfully updated zones.config")
-                }
-                // Errors are handled inside performUpdateAction setting the status directly now,
-                // or we could return Result object. To keep it simple with existing code:
-            } catch (e: Exception) {
-                // Catch unexpected errors
-                _configUpdateStatus.value = ConfigUpdateStatus.Error("Error updating: ${e.message}")
-            }
-        }
-    }
-
-    private suspend fun performUpdateAction(): Boolean {
-        // This runs on Dispatchers.IO (called from withContext(IO) above)
-        return try {
-            val url = URL("https://raw.githubusercontent.com/Aleks-Levet/better-nothing-music-visualizer/main/zones.config")
-            val connection = withContext(Dispatchers.IO) {
-                url.openConnection()
-            } as HttpURLConnection
-            connection.connectTimeout = 10000
-            connection.readTimeout = 10000
-
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val content = connection.inputStream.bufferedReader().use { it.readText() }
-                // Basic validation
-                JSONObject(content)
-
-                val file = File(ctx.filesDir, "zones.config")
-                file.writeText(content)
-
-                // Refresh presets (file IO)
-                refreshPresetsInternal()
-
-                // Force running service to reload its config from disk
-                MainActivity.serviceStatic?.reloadConfig()
-                true
-            } else {
-                withContext(Dispatchers.Main) {
-                    _configUpdateStatus.value = ConfigUpdateStatus.Error("Failed to download: ${connection.responseCode}")
-                }
-                false
-            }
-        } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                _configUpdateStatus.value = ConfigUpdateStatus.Error("Error updating: ${e.message}")
-            }
-            false
-        }
-    }
-
-    fun resetConfigUpdateStatus() {
-        _configUpdateStatus.value = ConfigUpdateStatus.Idle
-    }
-
-    // ── Theme & Font ─────────────────────────────────────────────────────────
-    private val _selectedTheme = MutableStateFlow("OLED Black")
-    val selectedTheme = _selectedTheme.asStateFlow()
-
-    private val _selectedFont = MutableStateFlow("NDot")
-    val selectedFont = _selectedFont.asStateFlow()
-
-    fun setSelectedTheme(theme: String) {
-        _selectedTheme.value = theme
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putString("selected_theme", theme) }
-        }
-    }
-
-    fun setSelectedFont(font: String) {
-        _selectedFont.value = font
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putString("selected_font", font) }
-        }
-    }
-
-    // ── Visualizer State (Live Preview) ─────────────────────────────────────
-    private val _visualizerState = MutableStateFlow(floatArrayOf())
-    val visualizerState = _visualizerState.asStateFlow()
-
-    fun updateVisualizerState(state: FloatArray) {
-        _visualizerState.value = state
-    }
-
-    // ── Haptic Settings ──────────────────────────────────────────────────────
-    private val _hapticMotorEnabled = MutableStateFlow(false)
-    val hapticMotorEnabled = _hapticMotorEnabled.asStateFlow()
-
-    private val _hapticFreqMin = MutableStateFlow(60f)
-    val hapticFreqMin = _hapticFreqMin.asStateFlow()
-
-    private val _hapticFreqMax = MutableStateFlow(250f)
-    val hapticFreqMax = _hapticFreqMax.asStateFlow()
-
-    private val _hapticMultiplier = MutableStateFlow(1.0f)
-    val hapticMultiplier = _hapticMultiplier.asStateFlow()
-
-    private val _hapticGamma = MutableStateFlow(2.0f)
-    val hapticGamma = _hapticGamma.asStateFlow()
-
-    fun setHapticMotorEnabled(enabled: Boolean) {
-        _hapticMotorEnabled.value = enabled
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putBoolean("haptic_motor_enabled", enabled) }
-        }
-    }
-
-    fun setHapticFreqRange(min: Float, max: Float) {
-        _hapticFreqMin.value = min
-        _hapticFreqMax.value = max
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit {
-                    putInt("haptic_freq_min", min.toInt())
-                    putInt("haptic_freq_max", max.toInt())
-                }
-        }
-    }
-
-    fun setHapticMultiplier(multiplier: Float) {
-        _hapticMultiplier.value = multiplier
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putFloat("haptic_multiplier", multiplier) }
-        }
-    }
-
-    fun setHapticGamma(gamma: Float) {
-        _hapticGamma.value = gamma
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putFloat("haptic_gamma", gamma) }
-        }
-    }
-
-    fun setIdleBreathingEnabled(enabled: Boolean) {
-        _idleBreathingEnabled.value = enabled
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putBoolean("idle_breathing_enabled", enabled) }
-        }
-    }
-
-    fun setIdlePattern(pattern: String) {
-        _idlePattern.value = pattern
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putString("idle_pattern", pattern) }
-        }
-    }
-
-    fun setNotificationFlashEnabled(enabled: Boolean) {
-        _notificationFlashEnabled.value = enabled
-        viewModelScope.launch(Dispatchers.IO) {
-            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putBoolean("notification_flash_enabled", enabled) }
-        }
-    }
+    val hapticsTabEnabled = _hapticsTabEnabled.asStateFlow()
 
     fun setAutoDeviceEnabled(enabled: Boolean): Int {
         _autoDeviceEnabled.value = enabled
         viewModelScope.launch(Dispatchers.IO) {
             ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-                .edit { putBoolean("auto_device_enabled", enabled) }
+                .edit().putBoolean("auto_device_enabled", enabled).apply()
         }
         return reloadLatencyForCurrentRoute()
     }
@@ -431,25 +215,11 @@ internal class MainViewModel(application: Application) : AndroidViewModel(applic
     init {
         // Run EVERYTHING heavy off-thread immediately
         viewModelScope.launch(Dispatchers.Default) {
-            val prefs = ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-
-            _developerModeEnabled.value = prefs.getBoolean("developer_mode_enabled", false)
-            _spoofedDevice.value = prefs.getInt("spoofed_device", DeviceProfile.DEVICE_NP1)
-
-            val actualDevice = DeviceProfile.detectDevice()
-            val device = if (_developerModeEnabled.value) _spoofedDevice.value else actualDevice
+            val device = DeviceProfile.detectDevice()
             selectedDevice.value = device
 
             // Load I/O in parallel using IO dispatcher
             launch(Dispatchers.IO) {
-                // Force update on first run if config is missing
-                val internalFile = File(ctx.filesDir, "zones.config")
-                val hasAsset = try { ctx.assets.open("zones.config").use { true } } catch (_: Exception) { false }
-
-                if (!internalFile.exists() && !hasAsset) {
-                    performUpdateAction()
-                }
-
                 val gamma = AudioCaptureService.loadGamma(ctx)
                 val latency = AudioCaptureService.loadLatencyCompensationMs(
                     ctx,
@@ -468,20 +238,6 @@ internal class MainViewModel(application: Application) : AndroidViewModel(applic
                 _autoDeviceEnabled.value = prefs.getBoolean("auto_device_enabled", true)
                 _glyphTabEnabled.value = prefs.getBoolean("glyph_tab_enabled", true)
                 _hapticsTabEnabled.value = prefs.getBoolean("haptics_tab_enabled", true)
-
-                _idleBreathingEnabled.value = prefs.getBoolean("idle_breathing_enabled", false)
-                _idlePattern.value = prefs.getString("idle_pattern", "pulse") ?: "pulse"
-                _notificationFlashEnabled.value = prefs.getBoolean("notification_flash_enabled", false)
-
-                val theme = prefs.getString("selected_theme", "OLED Black") ?: "OLED Black"
-                _selectedTheme.value = if (theme == "Normal") "OLED Black" else theme
-                _selectedFont.value = prefs.getString("selected_font", "NDot") ?: "NDot"
-
-                _hapticMotorEnabled.value = prefs.getBoolean("haptic_motor_enabled", false)
-                _hapticFreqMin.value = prefs.getInt("haptic_freq_min", 60).toFloat()
-                _hapticFreqMax.value = prefs.getInt("haptic_freq_max", 250).toFloat()
-                _hapticMultiplier.value = prefs.getFloat("haptic_multiplier", 1.0f)
-                _hapticGamma.value = prefs.getFloat("haptic_gamma", 2.0f)
             }
 
             startRunningStatePoller()
@@ -512,20 +268,8 @@ internal class MainViewModel(application: Application) : AndroidViewModel(applic
     /** Reloads preset list from disk; safe to call from the main thread. */
     fun refreshPresets() {
         viewModelScope.launch(Dispatchers.IO) {
-            refreshPresetsInternal()
-        }
-    }
-
-    private suspend fun refreshPresetsInternal() {
-        // First clear to ensure UI refresh if somehow the data is merged
-        val infos = AudioCaptureService.loadPresetInfos(ctx, selectedDevice.value)
-
-        // Switch to Main to update StateFlow safely
-        withContext(Dispatchers.Main) {
-            _presetInfos.value = infos
-            if (infos.none { it.key == _selectedPreset.value }) {
-                _selectedPreset.value = infos.firstOrNull()?.key.orEmpty()
-            }
+            val infos = AudioCaptureService.loadPresetInfos(ctx, selectedDevice.value)
+            withContext(Dispatchers.Main.immediate) { commitPresetInfos(infos) }
         }
     }
 
@@ -558,6 +302,22 @@ internal class MainViewModel(application: Application) : AndroidViewModel(applic
         return _connectedDeviceKey.value.takeIf { _autoDeviceEnabled.value }
     }
 
+    fun setGlyphTabEnabled(enabled: Boolean) {
+        _glyphTabEnabled.value = enabled
+        viewModelScope.launch(Dispatchers.IO) {
+            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("glyph_tab_enabled", enabled).apply()
+        }
+    }
+
+    fun setHapticsTabEnabled(enabled: Boolean) {
+        _hapticsTabEnabled.value = enabled
+        viewModelScope.launch(Dispatchers.IO) {
+            ctx.getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("haptics_tab_enabled", enabled).apply()
+        }
+    }
+
     private fun commitPresetInfos(infos: List<AudioCaptureService.PresetInfo>) {
         _presetInfos.value = infos
         if (infos.none { it.key == _selectedPreset.value }) {
@@ -569,21 +329,17 @@ internal class MainViewModel(application: Application) : AndroidViewModel(applic
 // ─── Activity ─────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
-class MainActivity : ComponentActivity(), SensorEventListener {
+class MainActivity : ComponentActivity() {
 
     // viewModels() returns the same instance across configuration changes.
     private val viewModel: MainViewModel by viewModels()
 
     private val audioManager by lazy {
-        getSystemService(AUDIO_SERVICE) as AudioManager
+        getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
 
     private val projectionManager by lazy {
         getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-    }
-
-    private val sensorManager by lazy {
-        getSystemService(SENSOR_SERVICE) as SensorManager
     }
 
     private var service: AudioCaptureService? = null
@@ -591,15 +347,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     private var pendingResultCode = 0
     private var pendingData: Intent? = null
     private var hasPendingToken = false
-    private var pendingVisualizerStart = false
-    private var showProjectionInfoDialog by mutableStateOf(false)
-
-    companion object {
-        const val EXTRA_REQUEST_START = "com.better.nothing.music.vizualizer.extra.REQUEST_START"
-        private const val PREF_PROJECTION_INFO_SHOWN = "projection_info_shown"
-        var serviceStatic: AudioCaptureService? = null
-            private set
-    }
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val audioDeviceCallback = object : AudioDeviceCallback() {
@@ -616,24 +363,20 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         @RequiresPermission(Manifest.permission.RECORD_AUDIO)
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             Log.d("BetterViz", "Service connected: $name")
-            val s = (binder as AudioCaptureService.LocalBinder).service
-            service = s
-            serviceStatic = s
+            service = (binder as AudioCaptureService.LocalBinder).service
             bound = true
-            refreshConnectedAudioRoute()
-            applyServiceSettings()
-            if (hasPendingToken && pendingData != null) {
-                val data = pendingData ?: return
-                service?.startCapture(pendingResultCode, data)
-                pendingResultCode = 0
-                pendingData = null
+
+            applyServiceSettings() // 最新の設定を反映
+
+            if (hasPendingToken) {
+                service?.startCapture()
+                viewModel.setRunning(true)
                 hasPendingToken = false
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
             service = null
-            serviceStatic = null
             bound = false
             // Use the lightweight static check; the poller will also catch any change.
             viewModel.setRunning(AudioCaptureService.isRunning())
@@ -641,28 +384,24 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     }
 
     private val projectionLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) @RequiresPermission(
+            Manifest.permission.RECORD_AUDIO
+        ) { result ->
             val data = result.data
             if (result.resultCode == RESULT_OK && data != null) {
-                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    deliverProjectionToken(result.resultCode, data)
-                } else {
-                    pendingVisualizerStart = false
-                    viewModel.setRunning(false)
-                    Toast.makeText(this@MainActivity, "Audio recording permission is required", Toast.LENGTH_SHORT).show()
-                }
+                deliverProjectionToken(result.resultCode, data)
             } else {
-                pendingVisualizerStart = false
                 viewModel.setRunning(false)
-                Toast.makeText(this@MainActivity, "Screen capture permission denied", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Screen capture permission denied", Toast.LENGTH_SHORT).show()
             }
         }
 
     private val notificationLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) requestProjection()
+            if (granted) {
+                service?.startCapture()
+            }
             else {
-                pendingVisualizerStart = false
                 viewModel.setRunning(false)
                 Toast.makeText(
                     this,
@@ -672,28 +411,11 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             }
         }
 
-    private val audioPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) requestProjection()
-            else {
-                pendingVisualizerStart = false
-                viewModel.setRunning(false)
-                Toast.makeText(
-                    this,
-                    "Audio recording permission is required",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
-            val selectedTheme by viewModel.selectedTheme.collectAsStateWithLifecycle()
-            val selectedFont by viewModel.selectedFont.collectAsStateWithLifecycle()
-
-            BetterVizTheme(themeName = selectedTheme, fontName = selectedFont) {
+            BetterVizTheme {
                 // Collect each StateFlow independently. Compose only recomposes the
                 // subtree(s) that actually read a value when it changes — collecting
                 // them as separate `by` delegates achieves this granularity.
@@ -704,32 +426,8 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 val gammaValue     by viewModel.gammaValue.collectAsStateWithLifecycle()
                 val presets        by viewModel.presetInfos.collectAsStateWithLifecycle()
                 val selectedPreset by viewModel.selectedPreset.collectAsStateWithLifecycle()
-
-                val hapticMotorEnabled by viewModel.hapticMotorEnabled.collectAsStateWithLifecycle()
-                val hapticFreqMin by viewModel.hapticFreqMin.collectAsStateWithLifecycle()
-                val hapticFreqMax by viewModel.hapticFreqMax.collectAsStateWithLifecycle()
-                val hapticMultiplier by viewModel.hapticMultiplier.collectAsStateWithLifecycle()
-                val hapticGamma by viewModel.hapticGamma.collectAsStateWithLifecycle()
-
-                val idleBreathingEnabled by viewModel.idleBreathingEnabled.collectAsStateWithLifecycle()
-                val idlePattern by viewModel.idlePattern.collectAsStateWithLifecycle()
-                val notificationFlashEnabled by viewModel.notificationFlashEnabled.collectAsStateWithLifecycle()
-
-                val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
-
-                if (showProjectionInfoDialog) {
-                    MediaProjectionInfoDialog(
-                        onDismiss = {
-                            pendingVisualizerStart = false
-                            showProjectionInfoDialog = false
-                        },
-                        onContinue = {
-                            markProjectionInfoShown()
-                            showProjectionInfoDialog = false
-                            continueVisualizerStartFlow()
-                        }
-                    )
-                }
+                val glyphTabEnabled by viewModel.glyphTabEnabled.collectAsStateWithLifecycle()
+                val hapticsTabEnabled by viewModel.hapticsTabEnabled.collectAsStateWithLifecycle()
 
                 BetterVizApp(
                     tab = tab,
@@ -746,51 +444,24 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                     onPresetSelected = ::onPresetSelected,
                     onToggleVisualizer = ::toggleVisualizer,
                     onAutoDeviceToggle = ::onAutoDeviceToggle,
+                    glyphTabEnabled = glyphTabEnabled,
+                    hapticsTabEnabled = hapticsTabEnabled,
+                    onGlyphTabToggle = ::onGlyphTabToggle,
+                    onHapticsTabToggle = ::onHapticsTabToggle,
                     viewModel = viewModel,
-                    hapticMotorEnabled = hapticMotorEnabled,
-                    onHapticMotorEnabledChanged = ::onHapticMotorEnabledChanged,
-                    hapticFreqMin = hapticFreqMin,
-                    hapticFreqMax = hapticFreqMax,
-                    onHapticFreqRangeChanged = ::onHapticFreqRangeChanged,
-                    hapticMultiplier = hapticMultiplier,
-                    onHapticMultiplierChanged = ::onHapticMultiplierChanged,
-                    hapticGamma = hapticGamma,
-                    onHapticGammaChanged = ::onHapticGammaChanged,
-                    idleBreathingEnabled = idleBreathingEnabled,
-                    onIdleBreathingEnabledChanged = ::onIdleBreathingEnabledChanged,
-                    idlePattern = idlePattern,
-                    onIdlePatternChanged = ::onIdlePatternChanged,
-                    notificationFlashEnabled = notificationFlashEnabled,
-                    onNotificationFlashEnabledChanged = ::onNotificationFlashEnabledChanged,
-                    selectedDevice = selectedDevice,
                 )
             }
         }
-
-        if (savedInstanceState == null) {
-            mainHandler.post { handleLaunchIntent(intent) }
-        }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleLaunchIntent(intent)
     }
 
     override fun onStart() {
         super.onStart()
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, mainHandler)
         refreshConnectedAudioRoute()
-
-        sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { accel ->
-            sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_UI)
-        }
     }
 
     override fun onStop() {
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
-        sensorManager.unregisterListener(this)
         super.onStop()
     }
 
@@ -824,67 +495,24 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         service?.setLatencyCompensationMs(latency)
     }
 
+    private fun onGlyphTabToggle(enabled: Boolean) {
+        viewModel.setGlyphTabEnabled(enabled)
+        if (!enabled && viewModel.selectedTab.value == Tab.Glyphs) {
+            viewModel.selectTab(Tab.Audio)
+        }
+    }
+
+    private fun onHapticsTabToggle(enabled: Boolean) {
+        viewModel.setHapticsTabEnabled(enabled)
+        if (!enabled && viewModel.selectedTab.value == Tab.Haptics) {
+            viewModel.selectTab(Tab.Audio)
+        }
+    }
+
     private fun onGammaChanged(value: Float) {
         viewModel.setGammaValue(value)
         viewModel.persistGamma(value)            // Dispatchers.IO — never blocks main
         service?.setGamma(value)
-    }
-
-    private fun onHapticMotorEnabledChanged(enabled: Boolean) {
-        viewModel.setHapticMotorEnabled(enabled)
-        service?.setHapticEnabled(enabled)
-    }
-
-    private fun onHapticFreqRangeChanged(min: Float, max: Float) {
-        viewModel.setHapticFreqRange(min, max)
-        service?.setHapticFreqRange(min, max)
-    }
-
-    private fun onHapticMultiplierChanged(multiplier: Float) {
-        viewModel.setHapticMultiplier(multiplier)
-        service?.setHapticMultiplier(multiplier)
-    }
-
-    private fun onHapticGammaChanged(gamma: Float) {
-        viewModel.setHapticGamma(gamma)
-        service?.setHapticGamma(gamma)
-    }
-
-    private fun onIdleBreathingEnabledChanged(enabled: Boolean) {
-        viewModel.setIdleBreathingEnabled(enabled)
-        service?.setIdleBreathingEnabled(enabled)
-    }
-
-    private fun onIdlePatternChanged(pattern: String) {
-        viewModel.setIdlePattern(pattern)
-        service?.setIdlePattern(pattern)
-    }
-
-    private fun onNotificationFlashEnabledChanged(enabled: Boolean) {
-        if (enabled && !isNotificationServiceEnabled()) {
-            Toast.makeText(this, "Please enable notification access for this feature", Toast.LENGTH_LONG).show()
-            startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-            return
-        }
-        viewModel.setNotificationFlashEnabled(enabled)
-        service?.setNotificationFlashEnabled(enabled)
-    }
-
-    private fun isNotificationServiceEnabled(): Boolean {
-        val pkgName = packageName
-        val flat = android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-        if (!flat.isNullOrEmpty()) {
-            val names = flat.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-            for (name in names) {
-                val cn = ComponentName.unflattenFromString(name)
-                if (cn != null) {
-                    if (pkgName == cn.packageName) {
-                        return true
-                    }
-                }
-            }
-        }
-        return false
     }
 
     private fun onPresetSelected(key: String) {
@@ -894,71 +522,49 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
     // ── Visualizer lifecycle ──────────────────────────────────────────────────
 
+
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                // 許可されたらもう一度 toggle を叩いて開始させる
+                toggleVisualizer()
+            } else {
+                Toast.makeText(this, "Audio permission is required for Visualizer", Toast.LENGTH_SHORT).show()
+            }
+        }
+
     private fun toggleVisualizer() {
         if (viewModel.runningState.value) {
             stopEverything()
             viewModel.setRunning(false)
             return
         }
-        if (viewModel.currentPreset().isBlank()) {
-            viewModel.refreshPresets()
-            Toast.makeText(this, "No preset is currently available", Toast.LENGTH_SHORT).show()
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             return
         }
-        beginVisualizerStartFlow()
-    }
 
-    private fun beginVisualizerStartFlow() {
-        pendingVisualizerStart = true
-        if (shouldShowProjectionInfo()) {
-            showProjectionInfoDialog = true
-            return
-        }
-        continueVisualizerStartFlow()
-    }
+        // サービスがまだなければ起動・接続を開始する
+        if (service == null) {
+            val serviceIntent = Intent(this, AudioCaptureService::class.java).apply {
+                putExtra(AudioCaptureService.EXTRA_PRESET_KEY, viewModel.currentPreset())
+            }
+            // フォアグラウンドサービスとして開始
+            ContextCompat.startForegroundService(this, serviceIntent)
+            // バインドして操作可能にする
+            bindService(serviceIntent, serviceConnection, BIND_AUTO_CREATE)
 
-    private fun continueVisualizerStartFlow() {
-        if (ContextCompat.checkSelfPermission(
-                this, Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            return
-        }
-        requestProjection()
-    }
-
-    // ── Shake to Update ──────────────────────────────────────────────────────
-
-    private var lastShakeTime: Long = 0
-    private val SHAKE_THRESHOLD = 12.0f
-    private val SHAKE_COOLDOWN = 2000L
-
-    override fun onSensorChanged(event: SensorEvent?) {
-        if (event == null || event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
-        if (viewModel.selectedTab.value != Tab.Settings) return
-
-        val x = event.values[0]
-        val y = event.values[1]
-        val z = event.values[2]
-
-        val gX = x / SensorManager.GRAVITY_EARTH
-        val gY = y / SensorManager.GRAVITY_EARTH
-        val gZ = z / SensorManager.GRAVITY_EARTH
-
-        val gForce = sqrt((gX * gX + gY * gY + gZ * gZ).toDouble()).toFloat()
-
-        if (gForce > SHAKE_THRESHOLD) {
-            val now = System.currentTimeMillis()
-            if (lastShakeTime + SHAKE_COOLDOWN > now) return
-            lastShakeTime = now
-
-            viewModel.updateZonesConfig()
-            Toast.makeText(this, "Shaked! Checking for updates...", Toast.LENGTH_SHORT).show()
+            // 注意: ここで service?.startCapture() を呼んでもまだ null なので、
+            // 実際の開始処理は onServiceConnected 内で行うようにフラグを立てる
+            hasPendingToken = true
+        } else {
+            // すでにバインド済みなら即開始
+            service?.startCapture()
+            viewModel.setRunning(true)
         }
     }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     private fun requestProjection() {
         if (ContextCompat.checkSelfPermission(
@@ -968,23 +574,10 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             return
         }
-
-        if (ContextCompat.checkSelfPermission(
-                this, Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            return
-        }
-
-        launchProjection()
     }
 
-    private fun launchProjection() {
-        pendingVisualizerStart = false
-        projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
-    }
 
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     private fun deliverProjectionToken(resultCode: Int, data: Intent) {
         val serviceIntent = Intent(this, AudioCaptureService::class.java).apply {
             putExtra(AudioCaptureService.EXTRA_PRESET_KEY, viewModel.currentPreset())
@@ -993,7 +586,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         if (!bound) bindService(serviceIntent, serviceConnection, BIND_AUTO_CREATE)
         if (bound && service != null) {
             applyServiceSettings()
-            service?.startCapture(resultCode, data)
+            service?.startCapture()
         } else {
             pendingResultCode = resultCode
             pendingData       = data
@@ -1011,12 +604,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         service?.setDevice(viewModel.selectedDevice.value)
         service?.setLatencyCompensationMs(viewModel.latencyMs.value)
         service?.setGamma(viewModel.gammaValue.value)
-
-        service?.setHapticEnabled(viewModel.hapticMotorEnabled.value)
-        service?.setHapticFreqRange(viewModel.hapticFreqMin.value, viewModel.hapticFreqMax.value)
-        service?.setHapticMultiplier(viewModel.hapticMultiplier.value)
-        service?.setHapticGamma(viewModel.hapticGamma.value)
-
         val preset = viewModel.currentPreset()
         if (preset.isNotBlank()) service?.setPreset(preset)
     }
@@ -1045,29 +632,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             this,
             ComponentName(this, VisualizerTileService::class.java)
         )
-    }
-
-    private fun handleLaunchIntent(intent: Intent?) {
-        if (intent?.getBooleanExtra(EXTRA_REQUEST_START, false) != true) return
-        intent.putExtra(EXTRA_REQUEST_START, false)
-        if (!AudioCaptureService.isRunning()) {
-            toggleVisualizer()
-        } else {
-            TileService.requestListeningState(
-                this,
-                ComponentName(this, VisualizerTileService::class.java)
-            )
-        }
-    }
-
-    private fun shouldShowProjectionInfo(): Boolean {
-        return !getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-            .getBoolean(PREF_PROJECTION_INFO_SHOWN, false)
-    }
-
-    private fun markProjectionInfoShown() {
-        getSharedPreferences("viz_prefs", Context.MODE_PRIVATE)
-            .edit { putBoolean(PREF_PROJECTION_INFO_SHOWN, true) }
     }
 
     private fun resolvePreferredAudioRoute(): AudioRoute? {
@@ -1121,7 +685,7 @@ private fun AudioDeviceInfo.toAudioRoute(): AudioRoute {
         .trim('_')
         .ifBlank { "unknown_output" }
     val normalizedAddress = address
-        .lowercase()
+        ?.lowercase()
         ?.replace(Regex("[^a-z0-9._-]+"), "_")
         ?.trim('_')
         ?.takeIf { it.isNotBlank() }
@@ -1134,45 +698,25 @@ private fun AudioDeviceInfo.toAudioRoute(): AudioRoute {
     )
 }
 
-// Define the static list outside or as a constant to avoid overhead
-private val Tabs = listOf(Tab.Audio, Tab.Glyphs, Tab.Haptics, Tab.Settings, Tab.About)
-
-private val HeavyEasingSpec = tween<Float>(
-    durationMillis = 600,
-    easing = EaseOutQuart
-)
-
 @Composable
-private fun MediaProjectionInfoDialog(
-    onDismiss: () -> Unit,
-    onContinue: () -> Unit,
-) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            androidx.compose.material3.Text("MediaProjection permission")
-        },
-        text = {
-            androidx.compose.material3.Text(
-                "This permission lets the app access the device audio stream through Android's capture system so the Glyph visualizer can react in real time. No unnecessary recordings are stored, and the app does not save your media or private data."
-            )
-        },
-        confirmButton = {
-            androidx.compose.material3.TextButton(onClick = onContinue) {
-                androidx.compose.material3.Text("Continue")
-            }
-        },
-        dismissButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) {
-                androidx.compose.material3.Text("Not now")
-            }
-        }
-    )
+private fun rememberVisibleTabs(
+    glyphTabEnabled: Boolean,
+    hapticsTabEnabled: Boolean,
+): List<Tab> = remember(glyphTabEnabled, hapticsTabEnabled) {
+    buildList {
+        add(Tab.Audio)
+        if (glyphTabEnabled) add(Tab.Glyphs)
+        if (hapticsTabEnabled) add(Tab.Haptics)
+        add(Tab.Settings)
+        add(Tab.About)
+    }
 }
+
+// ─── Root app composable ──────────────────────────────────────────────────────
 
 @Composable
 private fun BetterVizApp(
-    viewModel: MainViewModel,
+    viewModel: MainViewModel, // Pass ViewModel to collect new flows
     tab: Tab,
     onTabSelected: (Tab) -> Unit,
     isRunning: Boolean,
@@ -1187,169 +731,109 @@ private fun BetterVizApp(
     onPresetSelected: (String) -> Unit,
     onToggleVisualizer: () -> Unit,
     onAutoDeviceToggle: (Boolean) -> Unit,
-    hapticMotorEnabled: Boolean,
-    onHapticMotorEnabledChanged: (Boolean) -> Unit,
-    hapticFreqMin: Float,
-    hapticFreqMax: Float,
-    onHapticFreqRangeChanged: (Float, Float) -> Unit,
-    hapticMultiplier: Float,
-    onHapticMultiplierChanged: (Float) -> Unit,
-    hapticGamma: Float,
-    onHapticGammaChanged: (Float) -> Unit,
-    idleBreathingEnabled: Boolean,
-    onIdleBreathingEnabledChanged: (Boolean) -> Unit,
-    idlePattern: String,
-    onIdlePatternChanged: (String) -> Unit,
-    notificationFlashEnabled: Boolean,
-    onNotificationFlashEnabledChanged: (Boolean) -> Unit,
-    selectedDevice: Int,
+    glyphTabEnabled: Boolean,
+    hapticsTabEnabled: Boolean,
+    onGlyphTabToggle: (Boolean) -> Unit,
+    onHapticsTabToggle: (Boolean) -> Unit,
 ) {
+    // Collect the new Device states
     val autoDeviceEnabled by viewModel.autoDeviceEnabled.collectAsStateWithLifecycle()
     val connectedDeviceName by viewModel.connectedDeviceName.collectAsStateWithLifecycle()
-
-    val haptics = LocalHapticFeedback.current
-    val scope = rememberCoroutineScope()
-
-    // ─── Polling: Update Live Preview ────────────────────────────────────────
-    LaunchedEffect(isRunning) {
-        if (isRunning) {
-            while (true) {
-                MainActivity.serviceStatic?.let { s ->
-                    viewModel.updateVisualizerState(s.currentLightState)
-                }
-                delay(16)
-            }
-        } else {
-            viewModel.updateVisualizerState(floatArrayOf())
-        }
-    }
-
-    val pagerState = rememberPagerState(
-        initialPage = Tabs.indexOf(tab).coerceAtLeast(0),
-        pageCount = { Tabs.size }
-    )
-
-    // ─── Haptics: Trigger exactly at 50% threshold ────────────────────────────
-    // snapshotFlow ignores the "settle" and fires as soon as the index integer flips
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }.collect {
-            // Only vibrate if the user is actually swiping
-            if (pagerState.isScrollInProgress) {
-                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-            }
-        }
-    }
-
-    // ─── Sync Pager -> ViewModel ──────────────────────────────────────────────
-    LaunchedEffect(pagerState.settledPage) {
-        val targetTab = Tabs.getOrNull(pagerState.settledPage)
-        if (targetTab != null && targetTab != tab) {
-            onTabSelected(targetTab)
-        }
-    }
-
-    // ─── Sync ViewModel -> Pager ──────────────────────────────────────────────
-    LaunchedEffect(tab) {
-        val targetPage = Tabs.indexOf(tab)
-        if (targetPage != -1 && targetPage != pagerState.currentPage) {
-            pagerState.animateScrollToPage(targetPage, animationSpec = HeavyEasingSpec)
-        }
-    }
+    val visibleTabs = rememberVisibleTabs(glyphTabEnabled, hapticsTabEnabled)
 
     Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxSize().background(Color.Black),
+        containerColor = Color.Black,
         floatingActionButton = {
             StartStopButton(running = isRunning, onClick = onToggleVisualizer)
         },
         bottomBar = {
             NativeBottomBar(
-                selectedTab = Tabs[pagerState.currentPage], // Snap highlight to current page
-                visibleTabs = Tabs,
-                onTabSelected = { targetTab ->
-                    val index = Tabs.indexOf(targetTab)
-                    if (index != -1 && index != pagerState.currentPage) {
-                        scope.launch {
-                            pagerState.animateScrollToPage(index, animationSpec = HeavyEasingSpec)
-                        }
-                    }
-                }
+                selectedTab = tab,
+                visibleTabs = visibleTabs,
+                onTabSelected = onTabSelected
             )
         },
     ) { innerPadding ->
-        val bottomPadding = innerPadding.calculateBottomPadding()
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = bottomPadding)
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1,
-                userScrollEnabled = true,
-                pageSpacing = 10.dp
-            ) { pageIndex ->
-                val currentTab = Tabs[pageIndex]
-                val pageOffset = ((pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction).absoluteValue
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding).background(Color.Black)) {
+            AnimatedContent(
+                targetState = tab,
+                label = "tab_content",
+                transitionSpec = {
+                    val isMovingRight = targetState.ordinal > initialState.ordinal
+                    // Spring physics: No bounce, but very smooth deceleration
+                    val springSpec = spring<IntOffset>(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val fraction = 1f - pageOffset.coerceIn(0f, 1f)
-                            // Your signature bouncy scaling
-                            val scale = 0.8f + (1f - 0.8f) * fraction
-                            scaleX = scale
-                            scaleY = scale
-                            alpha = 0.4f + (1f - 0.4f) * fraction
+                    // Subtle scale and fade specs
+                    val fadeSpec = tween<Float>(durationMillis = 300)
+                    val scaleSpec = tween<Float>(durationMillis = 400, easing = EaseOutQuart)
+                    if (isMovingRight) {
+                        (slideInHorizontally(initialOffsetX = { it }, animationSpec = springSpec) +
+                                fadeIn(fadeSpec) +
+                                scaleIn(initialScale = 0.95f, animationSpec = scaleSpec))
+                            .togetherWith(
+                                slideOutHorizontally(targetOffsetX = { -it }, animationSpec = springSpec) +
+                                        fadeOut(fadeSpec) +
+                                        scaleOut(targetScale = 0.95f, animationSpec = scaleSpec)
+                            )
+                    } else {
+                        (slideInHorizontally(initialOffsetX = { -it }, animationSpec = springSpec) +
+                                fadeIn(fadeSpec) +
+                                scaleIn(initialScale = 0.95f, animationSpec = scaleSpec))
+                            .togetherWith(
+                                slideOutHorizontally(targetOffsetX = { it }, animationSpec = springSpec) +
+                                        fadeOut(fadeSpec) +
+                                        scaleOut(targetScale = 0.95f, animationSpec = scaleSpec)
+                            )
+                    }.using(SizeTransform(clip = false))
+                },
+                modifier = Modifier.fillMaxSize()
+            ) { currentTab ->
+// Inside here, we no longer pass innerPadding down,
+// as the parent Box is already handling it.
+                when (currentTab) {
+                    Tab.Audio -> AudioScreen(
+                        isRunning = isRunning,
+                        latencyMs = latencyMs,
+                        onLatencyChanged = onLatencyChanged,
+                        latencyPresets = latencyPresets,
+                        onLatencyPresetsChanged = onLatencyPresetsChanged,
+                        autoDeviceEnabled = autoDeviceEnabled,
+                        onAutoDeviceToggle = onAutoDeviceToggle,
+                        connectedDeviceName = connectedDeviceName,
+                    )
+
+                    Tab.Glyphs -> {
+                        AnimatedContent(
+                            targetState = selectedPreset,
+                            transitionSpec = {
+                                fadeIn(tween(200)) togetherWith fadeOut(tween(200))
+                            },
+                            label = "preset_swap_animation"
+                        ) { targetPreset ->
+                            GlyphsScreen(
+                                gammaValue = gammaValue,
+                                onGammaChanged = onGammaChanged,
+                                presets = presets,
+                                selectedPreset = targetPreset,
+                                onPresetSelected = onPresetSelected,
+                            )
                         }
-                ) {
-                    when (currentTab) {
-                        Tab.Audio -> AudioScreen(
-                            isRunning = isRunning,
-                            latencyMs = latencyMs,
-                            onLatencyChanged = onLatencyChanged,
-                            latencyPresets = latencyPresets,
-                            onLatencyPresetsChanged = onLatencyPresetsChanged,
-                            autoDeviceEnabled = autoDeviceEnabled,
-                            onAutoDeviceToggle = onAutoDeviceToggle,
-                            connectedDeviceName = connectedDeviceName,
-                        )
-                        Tab.Glyphs -> GlyphsScreen(
-                            gammaValue = gammaValue,
-                            onGammaChanged = onGammaChanged,
-                            presets = presets,
-                            selectedPreset = selectedPreset,
-                            onPresetSelected = onPresetSelected,
-                            isRunning = isRunning,
-                            selectedDevice = selectedDevice,
-                            viewModel = viewModel,
-                        )
-                        Tab.Haptics -> HapticsScreen(
-                            hapticMotorEnabled = hapticMotorEnabled,
-                            onHapticMotorEnabledChanged = onHapticMotorEnabledChanged,
-                            hapticFreqMin = hapticFreqMin,
-                            hapticFreqMax = hapticFreqMax,
-                            onHapticFreqRangeChanged = onHapticFreqRangeChanged,
-                            hapticMultiplier = hapticMultiplier,
-                            onHapticMultiplierChanged = onHapticMultiplierChanged,
-                            hapticGamma = hapticGamma,
-                            onHapticGammaChanged = onHapticGammaChanged,
-                        )
-                        Tab.Settings -> SettingsScreen(
-                            viewModel = viewModel,
-                            idleBreathingEnabled = idleBreathingEnabled,
-                            onIdleBreathingEnabledChanged = onIdleBreathingEnabledChanged,
-                            idlePattern = idlePattern,
-                            onIdlePatternChanged = onIdlePatternChanged,
-                            notificationFlashEnabled = notificationFlashEnabled,
-                            onNotificationFlashEnabledChanged = onNotificationFlashEnabledChanged,
-                        )
-                        Tab.About -> AboutScreen()
                     }
+
+                    Tab.Haptics -> {}
+
+                    Tab.Settings -> SettingsScreen(
+                        glyphTabEnabled = glyphTabEnabled,
+                        hapticsTabEnabled = hapticsTabEnabled,
+                        onGlyphTabToggle = onGlyphTabToggle,
+                        onHapticsTabToggle = onHapticsTabToggle,
+                    )
+
+                    Tab.About -> AboutScreen()
                 }
             }
         }
