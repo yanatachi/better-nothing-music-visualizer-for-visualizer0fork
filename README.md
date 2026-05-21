@@ -4,6 +4,7 @@
 
 ## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Double%20Exclamation%20Mark.png" alt="Double Exclamation Mark" width="25" height="25" /> **重要なお知らせ**
 このプロジェクトは[Aleks levet氏](https://github.com/Aleks-Levet)の作成した[Better-Nothing-Music-Visualizer](https://github.com/Aleks-Levet/better-nothing-music-visualizer)の**フォークであり**[Aleks levet氏](https://github.com/Aleks-Levet)が作成したものではありません。
+また、機種やROMによっては稀にVisualizer(0)からの音声取得がうまくできない場合があります。そのような場合は本家の[Better-Nothing-Music-Visualizer](https://github.com/Aleks-Levet/better-nothing-music-visualizer)をご使用ください。
 
 ## <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Face%20with%20Raised%20Eyebrow.png" alt="Face with Raised Eyebrow" width="25" height="25" /> どうしてこのフォークを作ったか・このフォークでは何が変わったか?
 [Aleks levet氏](https://github.com/Aleks-Levet)の[Better-Nothing-Music-Visualizer](https://github.com/Aleks-Levet/better-nothing-music-visualizer)はMediaProjectionを必要とし、毎度毎度ポップアップから画面共有を許可しないといけませんし、通知も見れなくなるという欠点がありました。
